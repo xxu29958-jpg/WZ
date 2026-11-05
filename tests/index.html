@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kon behavior tests</title>
+  <style>
+    body { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: #f6efe1; color: #3a2417; margin: 24px; }
+    h1 { font: 600 20px/1.2 Georgia, serif; }
+    li { margin: 6px 0; }
+    .pass b { color: #3c7a3c; }
+    .fail b { color: #b8352b; }
+    .info { color: #7a5c48; display: block; padding-left: 18px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Kon — behavior tests</h1>
+  <p id="summary">running…</p>
+  <ol id="list"></ol>
+  <script type="module">
+    import { runAll } from './behavior.js';
+    const results = runAll();
+    const list = document.getElementById('list');
+    for (const r of results) {
+      const li = document.createElement('li');
+      li.className = r.ok ? 'pass' : 'fail';
+      li.innerHTML = `<b>${r.ok ? 'PASS' : 'FAIL'}</b> ${r.name}<span class="info"></span>`;
+      li.querySelector('.info').textContent = r.info;
+      list.appendChild(li);
+    }
+    const passed = results.filter((r) => r.ok).length;
+    document.getElementById('summary').textContent = `${passed} / ${results.length} passed`;
+    window.__results = results;
+  </script>
+</body>
+</html>

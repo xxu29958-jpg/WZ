@@ -1,0 +1,225 @@
+// ZEN70 · 禅道 — wiring.
+//
+//   InputTracker  (raw DOM events → senses)
+//        ↓
+//   Brain         (senses → pose: what Kon wants to do)
+//        ↓
+//   FoxRig        (pose → springs → SVG)        Scene (garden, layout, props)
+//
+// One requestAnimationFrame loop drives everything; DOM events only record data.
+
+import { Brain } from './brain.js';
+import { FoxRig } from './rig.js';
+import { InputTracker } from './input.js';
+import { Scene } from './scene.js';
+import { Sound } from './audio.js';
+import { setClock } from './clock.js';
+import { makeRng } from './math.js';
+import { runDemo } from './demo.js';
+
+const $ = (id) => document.getElementById(id);
+const app = $('app');
+const wishInput = $('wish-input');
+const form = $('wish');
+const captionEl = $('caption');
+const params = new URLSearchParams(location.search);
+const reducedMQ = matchMedia('(prefers-reduced-motion: reduce)');
+const coarseMQ = matchMedia('(pointer: coarse)');
+const reduced = () => reducedMQ.matches || params.has('reduced');
+const demo = params.get('demo');
+const manual = params.has('manual') || !!demo;
+// scripted checks use repeatable randomness
+const rngFor = (k) => (manual ? makeRng((+params.get('seed') || 7) + k) : Math.random);
+if (manual) document.body.classList.add('frozen');
+
+const sound = new Sound();
+let input; // created after the scene, which it needs for coordinates
+
+const scene = new Scene({
+  app,
+  svg: $('scene'),
+  back: $('scene-back'),
+  glow: $('glow'),
+  ema: form,
+  caption: captionEl,
+  reducedMotion: reduced(),
+  rng: rngFor(3),
+  emit: (ev) => {
+    if (ev.type === 'sfx') sound.play(ev.name, ev.k);
+    else input.push(ev);
+  },
+});
+
+input = new InputTracker({
+  surface: app,
+  toWorld: scene.toWorld,
+  input: wishInput,
+  form,
+  inputSpan: scene.inputSpan,
+});
+
+const rig = new FoxRig($('kon'), { reducedMotion: reduced(), rng: rngFor(1) });
+const brain = new Brain({ reducedMotion: reduced(), rng: rngFor(2) });
+
+reducedMQ.addEventListener?.('change', () => {
+  rig.setReducedMotion(reduced());
+  brain.reduced = reduced();
+  scene.reduced = reduced();
+});
+
+// --- touching Kon directly: boop the nose, pat the head ---
+$('kon-nose-hit').addEventListener('pointerdown', (e) => {
+  e.__kon = 'boop';
+  input.push({ type: 'boop' });
+});
+$('kon-head').addEventListener('pointerdown', (e) => {
+  if (e.__kon) return;
+  input.push({ type: 'pat' });
+});
+
+// --- viewport, virtual keyboard ---
+let baseH = window.innerHeight;
+let lastOrientation = screen.orientation?.type;
+function applyViewport() {
+  const vv = window.visualViewport;
+  // iOS shrinks only the visual viewport for the keyboard; Android may shrink both
+  const h = Math.min(vv ? vv.height : Infinity, window.innerHeight);
+  const top = vv ? vv.offsetTop : 0;
+  const o = screen.orientation?.type;
+  if (o !== lastOrientation) { baseH = window.innerHeight; lastOrientation = o; }
+  baseH = Math.max(baseH, window.innerHeight);
+  document.documentElement.style.setProperty('--vvh', `${h}px`);
+  app.style.top = `${top}px`;
+  const kb = coarseMQ.matches && document.activeElement === wishInput && h < baseH * 0.82;
+  document.body.classList.toggle('kb-open', kb);
+  scene.layout({ keyboard: kb });
+  input.reproject();
+}
+window.addEventListener('resize', applyViewport);
+window.visualViewport?.addEventListener('resize', applyViewport);
+window.visualViewport?.addEventListener('scroll', applyViewport);
+wishInput.addEventListener('focus', () => setTimeout(applyViewport, 300));
+wishInput.addEventListener('blur', () => setTimeout(applyViewport, 300));
+document.fonts?.ready.then(applyViewport);
+applyViewport();
+
+// --- controls ---
+const soundBtn = $('btn-sound');
+soundBtn.addEventListener('click', () => {
+  sound.setOn(!sound.on);
+  soundBtn.setAttribute('aria-pressed', String(sound.on));
+  if (sound.on) sound.play('startle');
+});
+const hintsBtn = $('btn-hints');
+const hints = $('hints');
+hintsBtn.addEventListener('click', () => {
+  const open = hints.hidden;
+  hints.hidden = !open;
+  hintsBtn.setAttribute('aria-expanded', String(open));
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !hints.hidden) { hints.hidden = true; hintsBtn.setAttribute('aria-expanded', 'false'); }
+});
+
+// --- the tab title misses you ---
+const baseTitle = document.title;
+document.addEventListener('visibilitychange', () => {
+  document.title = document.hidden ? 'Kon is not waiting for you · ZEN70' : baseTitle;
+});
+
+// --- caption ---
+let captionAt = -1;
+let captionTimer = 0;
+function updateCaption() {
+  const c = brain.caption;
+  if (c.at === captionAt) return;
+  captionAt = c.at;
+  const span = captionEl.firstElementChild;
+  if (span.textContent === c.text) return;
+  if (manual) { span.textContent = c.text; return; }
+  captionEl.classList.add('swap');
+  clearTimeout(captionTimer);
+  captionTimer = setTimeout(() => {
+    span.textContent = c.text;
+    captionEl.classList.remove('swap');
+  }, 200);
+}
+
+// --- debug overlay (?debug) ---
+const debugEl = $('debug');
+const showDebug = params.has('debug');
+if (showDebug) debugEl.hidden = false;
+let debugAt = 0;
+
+// --- the loop ---
+function tick(dt, ts) {
+  const senses = input.sample();
+  for (const ev of senses.events) {
+    if (ev.type === 'input') scene.nudgeEma(ev.del ? 0.4 : 0.7);
+    if (ev.type === 'submit') {
+      scene.launchCrane();
+      if (coarseMQ.matches) wishInput.blur();
+    }
+  }
+  senses.body = rig.measure();
+  senses.objects = scene.objects();
+  senses.places = scene.places;
+
+  const pose = brain.update(dt, senses);
+  for (const em of brain.emits) {
+    if (em.type === 'sfx') sound.play(em.data);
+    else if (em.type === 'dragonfly') scene.spawnDragonfly();
+    else if (em.type === 'poke') scene.pokeFlower(1);
+  }
+  rig.update(dt, pose);
+  scene.update(dt);
+  updateCaption();
+
+  if (showDebug && ts - debugAt > 100) {
+    debugAt = ts;
+    const d = brain.debug();
+    debugEl.textContent =
+      `state     ${d.state}${d.label ? ' · ' + d.label : ''}\n` +
+      `act       ${d.act}${d.variant ? ' · ' + d.variant : ''}\n` +
+      `attention ${d.attn}\n` +
+      `curiosity ${d.cur.toFixed(2)}  ptr ${d.ptrI.toFixed(2)}  type ${d.typeI.toFixed(2)}\n` +
+      `pointer   ${d.ptrActive ? 'moving' : 'still'}   typing ${d.typeActive ? 'yes' : 'no'}\n` +
+      `caught    ${d.caught}   idle ${d.idleFor.toFixed(1)}s   mode ${scene.mode}`;
+  }
+}
+
+const zen = { brain, rig, scene, input, sound };
+
+if (manual) {
+  // Test mode: time only moves when a script calls __zen.advance(seconds, fn).
+  // fn(t) runs before each 60 fps frame and may dispatch input events.
+  let T = performance.now() / 1000;
+  setClock(() => T);
+  zen.advance = (seconds, fn) => {
+    const n = Math.round(seconds * 60);
+    for (let i = 0; i < n; i++) {
+      if (fn) fn(i / 60);
+      T += 1 / 60;
+      tick(1 / 60, T * 1000);
+    }
+    return brain.debug();
+  };
+} else {
+  let last = performance.now();
+  const frame = (ts) => {
+    let dt = (ts - last) / 1000;
+    last = ts;
+    if (dt > 0.25 || dt <= 0) dt = 1 / 60;
+    tick(dt, ts);
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
+// handles for testing from the console / automated checks
+window.__zen = zen;
+
+if (demo) {
+  const t = params.get('t');
+  runDemo(zen, demo, { act: params.get('act'), t: t ? +t : undefined });
+}

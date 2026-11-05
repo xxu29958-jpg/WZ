@@ -1,0 +1,184 @@
+// Scripted demos for verification screenshots: index.html?demo=<name>
+// Runs on the virtual clock (?manual is implied), feeding synthetic pointer and
+// typing events through the real InputTracker → Brain → Rig pipeline, then
+// freezes on the moment worth looking at. A small drawn cursor shows where
+// the "mouse" is, since screenshots don't include the real one.
+
+export function runDemo(zen, name, opts = {}) {
+  const app = document.getElementById('app');
+  const input = document.getElementById('wish-input');
+  const { brain, rig, scene } = zen;
+  const cursor = document.createElement('div');
+  cursor.className = 'demo-cursor';
+  cursor.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26"><path d="M3 2 L3 19 L8 14.5 L11.5 22 L14.5 20.6 L11 13.4 L18 13.4 Z" fill="#fff" stroke="#1d120c" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+  app.appendChild(cursor);
+
+  const head = () => {
+    const h = rig.measure().restHead;
+    return scene.toScreen(h.x, h.y);
+  };
+  const H = head();
+  const W = app.clientWidth;
+  let cx = W * 0.85, cy = H.y - 260;
+  const move = (x, y) => {
+    cx = x; cy = y;
+    app.dispatchEvent(new PointerEvent('pointermove', { clientX: x, clientY: y, pointerType: 'mouse', bubbles: true }));
+  };
+  const adv = (s, fn) => zen.advance(s, fn);
+  const until = (pred, max = 6, fn) => {
+    for (let i = 0; i < max * 60 && !pred(); i++) zen.advance(1 / 60, fn);
+  };
+  const sweep = (secs, { y = H.y - 230, ax = Math.min(W * 0.32, 440), w = 1.15, phase = 0 } = {}) =>
+    adv(secs, (t) => move(H.x + ax * Math.sin(t * w + phase), y + 30 * Math.sin(t * w * 1.8)));
+  const typeFor = (secs, every = 0.14) => {
+    let next = 0;
+    adv(secs, (t) => {
+      if (t >= next) {
+        input.dispatchEvent(new InputEvent('input', { inputType: 'insertText', bubbles: true }));
+        next += every;
+      }
+    });
+  };
+  const approach = () => {
+    let x = H.x + Math.min(W * 0.42, 520), y = H.y - 40;
+    move(x, y);
+    adv(0.1);
+    for (let i = 0; i < 120 && brain.state !== 'STARTLED'; i++) {
+      const dx = H.x - x, dy = H.y - y, d = Math.hypot(dx, dy);
+      if (d < 20) break;
+      x += (dx / d) * 22; y += (dy / d) * 22;
+      zen.advance(1 / 60, () => move(x, y));
+    }
+  };
+  // headless windows may not deliver focus events, so make sure one arrives
+  const focusInput = () => {
+    input.focus();
+    if (!zen.input.typing.focused) input.dispatchEvent(new FocusEvent('focus'));
+  };
+  const forceAct = (act) => {
+    if (!act) return;
+    const bag = brain.pretendBag;
+    const orig = bag.next.bind(bag);
+    bag.next = () => { bag.next = orig; return act; };
+  };
+  const pretend = (act) => {
+    forceAct(act);
+    sweep(3.4);
+    until(() => brain.state === 'PRETENDING', 3);
+  };
+
+  adv(1);
+  switch (name) {
+    case 'idle':
+      cursor.hidden = true;
+      adv(1.5);
+      break;
+    case 'peek':
+      sweep(3.6, { phase: -0.6 });
+      break;
+    case 'peek-low':
+      sweep(3.6, { y: H.y + 160, phase: 1.2 });
+      break;
+    case 'stalk': {
+      sweep(2.4);
+      const x0 = cx;
+      adv(1.6, (t) => move(x0 - t * 70, cy + t * 20));
+      break;
+    }
+    case 'noticed':
+      sweep(3.4);
+      until(() => brain.state === 'NOTICED', 2);
+      adv(0.16);
+      break;
+    case 'pretend':
+      pretend(opts.act || 'whistle');
+      adv(opts.t ?? 1.4);
+      break;
+    case 'resume':
+      pretend(opts.act || 'whistle');
+      adv(1.3);
+      until(() => brain.state === 'RESUMING', 3, () => move(cx + 4, cy));
+      adv(0.45, () => move(cx + 4, cy));
+      break;
+    case 'startle':
+      approach();
+      adv(0.18, () => {});
+      break;
+    case 'cover':
+    case 'pout':
+    case 'bleh':
+      brain.caught = { cover: 1, pout: 2, bleh: 3 }[name];
+      brain.lastCaughtAt = -10;
+      approach();
+      adv({ cover: 1.45, pout: 1.0, bleh: 1.0 }[name]);
+      break;
+    case 'typing':
+      cursor.hidden = true;
+      focusInput();
+      input.value = 'may the moss grow slowly';
+      adv(0.4);
+      typeFor(2.6);
+      break;
+    case 'typing-stop':
+      cursor.hidden = true;
+      forceAct(opts.act || 'meditate');
+      focusInput();
+      input.value = 'more naps for everyone';
+      adv(0.4);
+      typeFor(2.6);
+      adv(opts.t ?? 2.4);
+      break;
+    case 'both':
+      focusInput();
+      input.value = 'a quiet afternoon';
+      adv(0.3);
+      {
+        let next = 0;
+        adv(2.4, (t) => {
+          move(H.x - 380 + t * 60, H.y - 200 + Math.sin(t * 3) * 30);
+          if (t >= next) { input.dispatchEvent(new InputEvent('input', { inputType: 'insertText', bubbles: true })); next += 0.15; }
+        });
+      }
+      break;
+    case 'sleep':
+      cursor.hidden = true;
+      adv(40);
+      break;
+    case 'dizzy':
+      adv(2.8, (t) => move(H.x + Math.cos(t * 8) * 230, H.y + Math.sin(t * 8) * 230));
+      until(() => brain.state === 'DIZZY', 2, (t) => move(H.x + Math.cos(t * 8) * 230, H.y + Math.sin(t * 8) * 230));
+      adv(0.8, () => {});
+      break;
+    case 'pet':
+      approach();
+      adv(4.2, () => {});
+      adv(1.8, (t) => move(H.x + Math.sin(t * 9) * 42, H.y - 30));
+      break;
+    case 'boop':
+      cursor.hidden = false;
+      move(H.x, H.y + 30);
+      zen.input.push({ type: 'boop' });
+      adv(0.02);
+      brain.arg.sneeze = true;
+      adv(opts.t ?? 1.15);
+      break;
+    case 'admire':
+      cursor.hidden = true;
+      focusInput();
+      input.value = 'see the sea';
+      typeFor(1.2);
+      document.getElementById('wish').requestSubmit();
+      adv(1.6);
+      break;
+    case 'night':
+      cursor.hidden = true;
+      scene.toggleNight(true);
+      adv(2.2);
+      break;
+    default:
+      break;
+  }
+  cursor.style.transform = `translate(${cx - 3}px, ${cy - 2}px)`;
+  document.title = `demo:${name} → ${brain.state}${brain.act ? ':' + brain.act.name : ''}`;
+  return brain.debug();
+}

@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <title>ZEN70 · 禅道</title>
+  <meta name="description" content="ZEN70 (禅道) — a small zen garden where Kon, a novice fox monk, is practicing meditation. Kon is very bad at it.">
+  <meta name="theme-color" content="#f1e7d3">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23e2483a'/%3E%3Cpath d='M14 50 C10 34 14 18 20 10 C26 18 28 24 30 30 L34 30 C36 24 38 18 44 10 C50 18 54 34 50 50 Z' fill='%23fff4e2'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..800,100;1,9..144,300..700,100&family=Kalam:wght@400;700&family=Ma+Shan+Zheng&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- far layer: sky, trees, wall and raked sand (static) -->
+  <svg id="scene-back" class="layer" viewBox="0 0 1600 1000" aria-hidden="true">
+    <defs>
+      <pattern id="roof-tiles" width="16" height="24" patternUnits="userSpaceOnUse">
+        <rect width="16" height="24" class="c-roof"/>
+        <path d="M 0.5,2 V 24" class="roof-seam"/>
+        <path d="M 2,4 Q 8,1 14,4" class="roof-hi"/>
+      </pattern>
+    </defs>
+    <g>
+      <!-- distant ink-wash hills and mist (generated) -->
+      <g id="sky" aria-hidden="true"></g>
+      <!-- trees beyond the wall -->
+      <g id="trees" aria-hidden="true">
+        <path class="c-tree-far" d="M -1500,540 L -1500,470 C -1400,430 -1300,452 -1220,440 C -1120,410 -1040,446 -960,436 C -860,406 -780,440 -700,430 C -600,400 -520,442 -440,426 C -340,398 -260,436 -180,424 C -90,398 -10,430 70,420 C 150,392 230,428 300,416 C 380,390 450,424 520,418 C 610,396 690,430 760,424 C 850,398 930,428 1010,420 C 1100,394 1180,430 1260,418 C 1340,392 1420,426 1500,416 C 1590,394 1670,428 1760,420 C 1850,396 1930,430 2010,422 C 2110,398 2200,432 2290,424 C 2390,400 2480,430 2580,424 C 2680,404 2780,432 2880,428 C 2980,410 3060,430 3100,440 L 3100,540 Z"/>
+        <g class="c-tree-near">
+          <path d="M -40,540 C -60,500 -20,470 20,478 C 30,446 80,436 108,458 C 130,430 186,438 192,474 C 226,470 250,500 236,540 Z"/>
+          <path d="M 470,540 C 450,508 478,484 510,490 C 520,466 560,462 578,480 C 598,462 632,470 634,498 C 660,500 676,522 664,540 Z"/>
+          <path d="M 1120,540 C 1094,500 1130,468 1170,476 C 1180,444 1236,432 1266,456 C 1292,430 1350,440 1352,478 C 1392,474 1420,506 1404,540 Z"/>
+          <path d="M 1700,540 C 1680,506 1706,480 1740,486 C 1752,460 1796,456 1812,478 C 1836,460 1870,470 1868,500 C 1894,504 1906,526 1894,540 Z"/>
+        </g>
+      </g>
+
+      <!-- the old earthen wall, with its tiled cap -->
+      <g id="wall" aria-hidden="true">
+        <rect x="-1500" y="514" width="4600" height="186" class="c-wall"/>
+        <g class="wall-stains">
+          <path d="M -120,560 C -80,548 -20,566 10,600 C 30,630 -10,668 -60,652 C -110,640 -150,590 -120,560 Z"/>
+          <path d="M 210,600 C 260,586 330,604 350,640 C 362,668 300,690 250,676 C 200,664 180,620 210,600 Z"/>
+          <path d="M 620,540 C 680,530 720,552 712,580 C 704,606 650,612 618,596 C 590,582 590,548 620,540 Z"/>
+          <path d="M 980,590 C 1040,572 1120,590 1130,628 C 1140,664 1060,684 1010,670 C 960,656 940,606 980,590 Z"/>
+          <path d="M 1380,548 C 1430,540 1480,560 1478,592 C 1476,620 1420,630 1390,612 C 1360,596 1352,556 1380,548 Z"/>
+          <path d="M 1700,610 C 1760,596 1830,612 1836,646 C 1840,676 1770,690 1730,676 C 1690,662 1670,620 1700,610 Z"/>
+        </g>
+        <rect x="-1500" y="488" width="4600" height="28" fill="url(#roof-tiles)"/>
+        <rect x="-1500" y="484" width="4600" height="8" class="c-roof-ridge"/>
+        <rect x="-1500" y="516" width="4600" height="9" class="wall-eave-shadow"/>
+        <rect x="-1500" y="692" width="4600" height="10" class="c-curb"/>
+      </g>
+
+      <!-- raked sand: base, generated rake lines and ripple rings -->
+      <g id="sand" aria-hidden="true">
+        <rect x="-1500" y="700" width="4600" height="1800" class="c-sand"/>
+        <g id="rake"></g>
+        <g id="rings"></g>
+      </g>
+
+    </g>
+  </svg>
+
+  <!-- the brushed ensō, painted procedurally onto a canvas at load -->
+  <canvas id="enso" class="layer-canvas" width="1080" height="1080" aria-hidden="true"></canvas>
+
+  <!-- ================================================================
+       THE GARDEN — a world of 1600 × 1000 design units, extended beyond
+       its edges so any screen aspect can be cropped from it. Two SVG layers
+       share one viewBox (far scenery behind, everything alive in front);
+       js/scene.js adds generated details and js/rig.js animates Kon.
+       ================================================================ -->
+  <svg id="scene" viewBox="0 0 1600 1000" role="img" aria-labelledby="scene-title">
+    <title id="scene-title">Kon, a small fox monk on a meditation cushion in a raked-sand zen garden, who keeps sneaking peeks at you.</title>
+    <defs>
+      <path id="head-shape" d="M 0,-74 C 48,-74 84,-50 88,-14 C 90,0 94,10 104,22 C 94,25 90,27 94,36 C 78,38 72,48 56,54 C 36,64 -36,64 -56,54 C -72,48 -78,38 -94,36 C -90,27 -94,25 -104,22 C -94,10 -90,0 -88,-14 C -84,-50 -48,-74 0,-74 Z"/>
+      <clipPath id="head-clip"><use href="#head-shape"/></clipPath>
+      <clipPath id="eye-clip"><ellipse rx="16.5" ry="20"/></clipPath>
+      <clipPath id="ear-clip"><path d="M -28,10 C -32,-16 -22,-50 -5,-76 Q 1,-83 7,-75 C 22,-50 32,-16 28,10 Z"/></clipPath>
+      <clipPath id="mouth-clip"><path id="mouth-clip-path" d="M 0,0"/></clipPath>
+      <radialGradient id="iris-grad" cx="50%" cy="38%" r="62%">
+        <stop offset="0" stop-color="#e09a4a"/>
+        <stop offset=".5" stop-color="#94481a"/>
+        <stop offset="1" stop-color="#3a190a"/>
+      </radialGradient>
+      <radialGradient id="window-glow" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stop-color="#ffe7a3"/>
+        <stop offset="1" stop-color="#f3b45a"/>
+      </radialGradient>
+      <symbol id="ema-mini" viewBox="-14 -12 28 24" overflow="visible">
+        <path d="M -12,-4 L 0,-11 L 12,-4 L 12,10 L -12,10 Z" class="c-wood-light ink-thin"/>
+        <path d="M -7,1 h 14 M -7,5 h 9" class="ema-scribble"/>
+      </symbol>
+    </defs>
+
+    <g id="world">
+
+      <!-- stone lantern (click to light it) -->
+      <g id="lantern" class="clickable" aria-label="Stone lantern">
+        <ellipse cx="330" cy="814" rx="128" ry="22" class="c-moss"/>
+        <ellipse cx="290" cy="810" rx="30" ry="7" class="c-moss-dark"/>
+        <ellipse cx="380" cy="818" rx="22" ry="5" class="c-moss-dark"/>
+        <path d="M 266,806 L 278,780 L 382,780 L 394,806 Q 330,816 266,806 Z" class="c-stone ink"/>
+        <path d="M 278,780 L 292,772 L 368,772 L 382,780 Z" class="c-stone-light ink"/>
+        <path d="M 314,774 L 314,642 L 346,642 L 346,774 Z" class="c-stone ink"/>
+        <path d="M 330,650 L 330,770" class="stone-crease"/>
+        <rect x="307" y="694" width="46" height="13" rx="4" class="c-stone-light ink"/>
+        <path d="M 284,642 L 298,622 L 362,622 L 376,642 Z" class="c-stone ink"/>
+        <rect x="292" y="548" width="76" height="76" rx="4" class="c-stone ink"/>
+        <rect id="lantern-window" x="313" y="563" width="34" height="42" rx="3" class="lantern-window ink-thin"/>
+        <path d="M 330,563 V 605 M 313,584 H 347" class="lantern-mullion"/>
+        <path d="M 248,552 C 272,548 292,532 304,514 L 356,514 C 368,532 388,548 412,552 Q 418,558 408,562 L 252,562 Q 242,558 248,552 Z" class="c-stone ink"/>
+        <path d="M 252,560 Q 330,570 408,560" class="stone-crease"/>
+        <path d="M 304,516 Q 330,502 356,516 Z" class="c-stone-light ink"/>
+        <path d="M 330,468 C 341,478 345,492 339,504 L 321,504 C 315,492 319,478 330,468 Z" class="c-stone ink"/>
+        <rect x="318" y="500" width="24" height="9" rx="3" class="c-stone-light ink-thin"/>
+        <path d="M 262,550 C 276,540 292,536 302,524 C 306,534 296,546 282,552 Z" class="c-moss"/>
+        <path d="M 364,528 C 372,538 386,544 398,548 C 386,552 370,548 362,538 Z" class="c-moss"/>
+        <path d="M 296,778 C 306,770 322,772 330,776 C 318,780 304,782 296,778 Z" class="c-moss"/>
+        <!-- a snail lives here -->
+        <g id="snail" class="clickable" transform="translate(352 742)">
+          <path id="snail-body" d="M -16,10 C -10,4 6,4 16,8 L 22,2 L 24,4 L 20,10 C 14,14 -10,14 -16,10 Z" class="c-snail ink-thin"/>
+          <g id="snail-shell"><circle r="9" cx="0" cy="2" class="c-shell ink-thin"/><path d="M 0,2 m -4,0 a 4,4 0 1 1 4,4 a 6,6 0 1 1 -6,-6" class="shell-spiral"/></g>
+        </g>
+      </g>
+
+      <!-- a little wish rack (ema-kake) -->
+      <g id="rack" aria-hidden="true">
+        <ellipse cx="1300" cy="836" rx="150" ry="16" class="c-sand-shadow"/>
+        <rect x="1182" y="606" width="16" height="230" rx="3" class="c-wood ink"/>
+        <rect x="1402" y="606" width="16" height="230" rx="3" class="c-wood ink"/>
+        <rect x="1164" y="632" width="272" height="14" rx="3" class="c-wood-light ink"/>
+        <path d="M 1140,604 Q 1300,584 1460,604 L 1452,616 Q 1300,598 1148,616 Z" class="c-wood-dark ink"/>
+        <path d="M 1150,600 Q 1300,572 1450,600" class="wood-hi"/>
+        <g class="ema-minis">
+          <path d="M 1214,646 v 10 M 1246,646 v 14 M 1356,646 v 12 M 1388,646 v 9" class="ema-string"/>
+          <use href="#ema-mini" x="1200" y="656" width="28" height="24"/>
+          <use href="#ema-mini" x="1232" y="660" width="28" height="24" transform="rotate(4 1246 672)"/>
+          <use href="#ema-mini" x="1342" y="658" width="28" height="24" transform="rotate(-5 1356 670)"/>
+          <use href="#ema-mini" x="1374" y="655" width="28" height="24"/>
+        </g>
+        <g id="ema-new"></g>
+      </g>
+
+      <!-- mossy rock -->
+      <g id="rock" aria-hidden="true">
+        <path d="M 1012,908 C 1006,876 1030,850 1066,846 C 1104,842 1140,860 1146,890 C 1150,914 1124,928 1080,930 C 1040,932 1016,926 1012,908 Z" class="c-stone ink"/>
+        <path d="M 1026,872 C 1040,852 1082,846 1110,856 C 1128,862 1138,874 1134,880 C 1110,868 1060,864 1026,872 Z" class="c-moss"/>
+        <path d="M 1040,900 Q 1060,906 1080,902" class="stone-crease"/>
+      </g>
+
+      <!-- the meditation spot: stepping stone and zafu cushion -->
+      <g id="cushion" aria-hidden="true">
+        <ellipse cx="800" cy="826" rx="170" ry="31" class="c-stone ink"/>
+        <ellipse cx="796" cy="818" rx="150" ry="20" class="c-stone-light"/>
+        <path d="M 672,784 C 672,802 678,816 694,822 Q 800,848 906,822 C 922,816 928,802 928,784 Z" class="c-zafu-side ink"/>
+        <path d="M 690,804 Q 694,812 702,816 M 730,812 Q 732,822 738,826 M 770,816 L 772,830 M 830,816 L 828,830 M 870,812 Q 868,822 862,826 M 910,804 Q 906,812 898,816" class="zafu-pleat"/>
+        <ellipse cx="800" cy="784" rx="128" ry="28" class="c-zafu-top ink"/>
+        <path d="M 686,776 Q 800,746 914,776" class="zafu-hi"/>
+        <g class="tassel">
+          <path d="M 906,814 q 6,10 2,22" class="tassel-cord"/>
+          <path d="M 904,832 l -3,14 h 12 l -3,-14 Z" class="c-gold ink-thin"/>
+        </g>
+      </g>
+
+      <!-- a small bellflower Kon finds fascinating -->
+      <g id="flower" aria-hidden="true">
+        <path d="M 652,830 C 640,826 640,818 650,816 C 656,812 668,814 670,822 C 676,826 670,834 660,834 Z" class="c-moss"/>
+        <g id="flower-stem" transform="translate(660 826)">
+          <path d="M 0,0 C -2,-16 6,-36 10,-52" class="flower-stem"/>
+          <path d="M 2,-22 C 10,-26 16,-24 18,-20 C 12,-18 6,-18 2,-22 Z" class="c-moss-dark"/>
+          <g id="flower-head" transform="translate(10 -54)">
+            <path d="M 0,-13 L 4,-5 L 12,-6 L 7,1 L 11,9 L 2,6 L -4,12 L -5,4 L -12,1 L -5,-3 Z" class="c-bloom ink-thin"/>
+            <circle r="3" class="c-gold"/>
+          </g>
+        </g>
+      </g>
+
+      <!-- KON — the novice fox monk. Every part is a named group the rig drives. -->
+      <g id="kon" transform="translate(800 788) scale(1.15)">
+        <ellipse class="kon-shadow" cx="0" cy="2" rx="92" ry="14"/>
+        <g id="kon-body">
+          <g id="kon-tail-g">
+            <path id="kon-tail" class="c-fur"/>
+            <path id="kon-tail-tip" class="c-cream"/>
+            <path id="kon-tail-ol" class="ink no-fill"/>
+          </g>
+          <g id="kon-torso">
+            <path class="c-fur ink" d="M -66,-2 C -82,-22 -80,-66 -56,-92 C -42,-106 -22,-110 0,-110 C 22,-110 42,-106 56,-92 C 80,-66 82,-22 66,-2 C 44,6 -44,6 -66,-2 Z"/>
+            <path class="c-fur-shade" d="M 52,-80 C 70,-58 74,-28 64,-6 C 58,-3 52,-2 48,-2 C 60,-28 60,-56 52,-80 Z"/>
+            <path class="c-cream" d="M -36,-4 C -46,-30 -40,-66 0,-78 C 40,-66 46,-30 36,-4 C 20,2 -20,2 -36,-4 Z"/>
+            <ellipse class="c-sock ink" cx="-34" cy="-7" rx="21" ry="12"/>
+            <ellipse class="c-sock ink" cx="34" cy="-7" rx="21" ry="12"/>
+            <path class="toes" d="M -42,-10 v 5 M -33,-11 v 6 M 33,-11 v 6 M 42,-10 v 5"/>
+          </g>
+          <path id="kon-neck" class="c-cream"/>
+          <path id="kon-neck-ol" class="ink no-fill"/>
+          <g id="kon-bib">
+            <path class="c-red ink" d="M -46,-104 Q 0,-90 46,-104 Q 42,-78 20,-62 Q 0,-48 -20,-62 Q -42,-78 -46,-104 Z"/>
+            <path class="bib-trim" d="M -40,-97 Q 0,-85 40,-97"/>
+            <circle cx="-22" cy="-82" r="2.4" class="c-cream"/>
+            <circle cx="22" cy="-82" r="2.4" class="c-cream"/>
+            <circle cx="0" cy="-72" r="2.4" class="c-cream"/>
+            <g id="kon-bell">
+              <path d="M -4,-60 Q 0,-55 4,-60" class="bell-cord"/>
+              <circle cx="0" cy="-49" r="7.5" class="c-gold ink"/>
+              <path d="M -4,-47 h 8 M 0,-47 v 5" class="bell-slit"/>
+              <circle cx="-2.5" cy="-52" r="2" class="bell-hi"/>
+            </g>
+          </g>
+
+          <g id="kon-head" class="clickable">
+            <g id="kon-ear-l" transform="translate(-46 -50) rotate(-20)">
+              <path class="c-fur" d="M -28,10 C -32,-16 -22,-50 -5,-76 Q 1,-83 7,-75 C 22,-50 32,-16 28,10 Z"/>
+              <path class="c-sock" clip-path="url(#ear-clip)" d="M -40,-48 C -14,-40 12,-50 40,-58 L 40,-100 L -40,-100 Z"/>
+              <path class="c-inner" d="M -16,4 C -19,-14 -12,-40 -1,-58 Q 1,-61 4,-57 C 13,-40 18,-14 16,4 Z"/>
+              <path class="ear-fluff" d="M -10,0 q 4,-8 2,-16 M 0,2 q 3,-10 1,-18 M 9,0 q 2,-8 -1,-15"/>
+              <path class="ink no-fill" d="M -28,10 C -32,-16 -22,-50 -5,-76 Q 1,-83 7,-75 C 22,-50 32,-16 28,10"/>
+            </g>
+            <g id="kon-ear-r" transform="translate(46 -50) rotate(20)">
+              <g transform="scale(-1 1)">
+                <path class="c-fur" d="M -28,10 C -32,-16 -22,-50 -5,-76 Q 1,-83 7,-75 C 22,-50 32,-16 28,10 Z"/>
+                <path class="c-sock" clip-path="url(#ear-clip)" d="M -40,-48 C -14,-40 12,-50 40,-58 L 40,-100 L -40,-100 Z"/>
+                <path class="c-inner" d="M -16,4 C -19,-14 -12,-40 -1,-58 Q 1,-61 4,-57 C 13,-40 18,-14 16,4 Z"/>
+                <path class="ear-fluff" d="M -10,0 q 4,-8 2,-16 M 0,2 q 3,-10 1,-18 M 9,0 q 2,-8 -1,-15"/>
+                <path class="ink no-fill" d="M -28,10 C -32,-16 -22,-50 -5,-76 Q 1,-83 7,-75 C 22,-50 32,-16 28,10"/>
+              </g>
+            </g>
+            <use href="#head-shape" class="c-fur"/>
+            <g clip-path="url(#head-clip)">
+              <g id="kon-mask">
+                <path class="c-cream" d="M -130,30 C -104,12 -80,12 -60,21 C -48,26 -32,27 -20,19 C -10,12 -5,5 0,3 C 5,5 10,12 20,19 C 32,27 48,26 60,21 C 80,12 104,12 130,30 L 130,96 L -130,96 Z"/>
+                <path class="c-fur-shade" opacity=".55" d="M -90,-70 C -60,-90 60,-90 90,-70 L 90,-60 C 60,-78 -60,-78 -90,-60 Z"/>
+              </g>
+            </g>
+            <use href="#head-shape" class="ink no-fill"/>
+            <g id="kon-ahoge" transform="translate(2 -72)">
+              <path class="c-fur ink-thin" d="M -7,6 C -9,-6 -3,-20 9,-27 C 5,-18 5,-10 7,-4 C 11,-12 17,-15 23,-15 C 17,-8 13,0 11,7 Z"/>
+            </g>
+
+            <g id="kon-face">
+              <path class="c-red" d="M 0,-61 C 7,-53 8,-45 0,-36 C -8,-45 -7,-53 0,-61 Z"/>
+              <path class="kitsune-mark" d="M -60,-14 Q -68,-20 -70,-30 M 60,-14 Q 68,-20 70,-30"/>
+              <ellipse id="kon-brow-l" class="c-cream" cx="0" cy="0" rx="7.5" ry="4" transform="translate(-36 -34)"/>
+              <ellipse id="kon-brow-r" class="c-cream" cx="0" cy="0" rx="7.5" ry="4" transform="translate(36 -34)"/>
+
+              <g id="kon-eye-l" class="eye" transform="translate(-37 -4)">
+                <g class="eye-squash">
+                  <g clip-path="url(#eye-clip)">
+                    <ellipse class="sclera" rx="16.5" ry="20"/>
+                    <g class="iris-g">
+                      <g class="iris-core">
+                        <ellipse class="iris" rx="13" ry="16" fill="url(#iris-grad)"/>
+                        <ellipse class="pupil" rx="7" ry="9.5"/>
+                        <circle class="hl" cx="-4.6" cy="-6.6" r="5"/>
+                        <circle class="hl2" cx="4.6" cy="5.4" r="2.2"/>
+                      </g>
+                      <path class="sparkle" d="M 6,-9 l 1.4,3.6 l 3.6,1.4 l -3.6,1.4 l -1.4,3.6 l -1.4,-3.6 l -3.6,-1.4 l 3.6,-1.4 Z M -6,6 l 1,2.4 l 2.4,1 l -2.4,1 l -1,2.4 l -1,-2.4 l -2.4,-1 l 2.4,-1 Z"/>
+                      <path class="spiral" d="M 0,0 m 1.5,0 a 1.5,1.5 0 1 1 -3,0 a 3.5,3.5 0 1 1 6.5,0.5 a 6,6 0 1 1 -11.5,-1 a 8.5,8.5 0 1 1 16.5,1.5 a 11,11 0 1 1 -21.5,-2"/>
+                    </g>
+                    <g class="lid-low" transform="translate(0 26)">
+                      <path class="c-fur" d="M -24,0 Q 0,-13 24,0 L 24,34 L -24,34 Z"/>
+                      <path class="lowline" d="M -24,0 Q 0,-13 24,0"/>
+                    </g>
+                    <g class="lid-up" transform="translate(0 -17)">
+                      <path class="c-fur" d="M -26,2 Q 0,-8 26,2 L 26,-50 L -26,-50 Z"/>
+                      <path class="lash" d="M -26,2 Q 0,-8 26,2"/>
+                    </g>
+                  </g>
+                </g>
+                <path class="shut shut-calm" d="M -14,3 Q 0,12 14,3"/>
+                <path class="shut shut-happy" d="M -14,7 Q 0,-7 14,7"/>
+                <path class="shut shut-squeeze" d="M -11,-7 L 9,1 L -11,8"/>
+              </g>
+
+              <g id="kon-eye-r" class="eye" transform="translate(37 -4)">
+                <g class="eye-squash">
+                  <g clip-path="url(#eye-clip)">
+                    <ellipse class="sclera" rx="16.5" ry="20"/>
+                    <g class="iris-g">
+                      <g class="iris-core">
+                        <ellipse class="iris" rx="13" ry="16" fill="url(#iris-grad)"/>
+                        <ellipse class="pupil" rx="7" ry="9.5"/>
+                        <circle class="hl" cx="-4.6" cy="-6.6" r="5"/>
+                        <circle class="hl2" cx="4.6" cy="5.4" r="2.2"/>
+                      </g>
+                      <path class="sparkle" d="M 6,-9 l 1.4,3.6 l 3.6,1.4 l -3.6,1.4 l -1.4,3.6 l -1.4,-3.6 l -3.6,-1.4 l 3.6,-1.4 Z M -6,6 l 1,2.4 l 2.4,1 l -2.4,1 l -1,2.4 l -1,-2.4 l -2.4,-1 l 2.4,-1 Z"/>
+                      <path class="spiral" d="M 0,0 m 1.5,0 a 1.5,1.5 0 1 1 -3,0 a 3.5,3.5 0 1 1 6.5,0.5 a 6,6 0 1 1 -11.5,-1 a 8.5,8.5 0 1 1 16.5,1.5 a 11,11 0 1 1 -21.5,-2"/>
+                    </g>
+                    <g class="lid-low" transform="translate(0 26)">
+                      <path class="c-fur" d="M -24,0 Q 0,-13 24,0 L 24,34 L -24,34 Z"/>
+                      <path class="lowline" d="M -24,0 Q 0,-13 24,0"/>
+                    </g>
+                    <g class="lid-up" transform="translate(0 -17)">
+                      <path class="c-fur" d="M -26,2 Q 0,-8 26,2 L 26,-50 L -26,-50 Z"/>
+                      <path class="lash" d="M -26,2 Q 0,-8 26,2"/>
+                    </g>
+                  </g>
+                </g>
+                <path class="shut shut-calm" d="M -14,3 Q 0,12 14,3"/>
+                <path class="shut shut-happy" d="M -14,7 Q 0,-7 14,7"/>
+                <path class="shut shut-squeeze" d="M 11,-7 L -9,1 L 11,8"/>
+              </g>
+
+              <g id="kon-blush" opacity="0">
+                <ellipse cx="-58" cy="27" rx="13" ry="7" class="c-blush"/>
+                <ellipse cx="58" cy="27" rx="13" ry="7" class="c-blush"/>
+                <path id="kon-blush-lines" class="blush-lines" d="M -63,23 l -3,7 M -57,22 l -3,7 M -51,23 l -3,7 M 53,23 l -3,7 M 59,22 l -3,7 M 65,23 l -3,7"/>
+              </g>
+
+              <g id="kon-snout">
+                <path id="kon-mouth-open" class="mouth-open"/>
+                <g clip-path="url(#mouth-clip)"><ellipse id="kon-tongue-in" class="tongue" rx="6" ry="4"/></g>
+                <path id="kon-blep" class="tongue ink-thin"/>
+                <path id="kon-mouth" class="mouth-line"/>
+                <ellipse id="kon-pucker" class="mouth-pucker" cx="0" cy="34" rx="3.6" ry="4.2" opacity="0"/>
+                <path class="f-ink" d="M -7.5,18 Q 0,14.5 7.5,18 Q 7,23.5 0,26 Q -7,23.5 -7.5,18 Z"/>
+                <ellipse cx="-2.6" cy="18.6" rx="2.4" ry="1.2" class="nose-hi"/>
+                <circle id="kon-nose-hit" cx="0" cy="22" r="17" class="hit"/>
+              </g>
+            </g>
+
+            <circle id="kon-bubble" cx="9" cy="25" r="0" class="bubble"/>
+            <g id="kon-sweat" transform="translate(86 -44)" opacity="0">
+              <path d="M 0,-13 C 5,-5 8,0 8,5 A 8 8 0 0 1 -8,5 C -8,0 -5,-5 0,-13 Z" class="sweat"/>
+              <path d="M -3,2 q 0,4 3,5" class="sweat-hi"/>
+            </g>
+            <g id="kon-shock" opacity="0">
+              <path class="shock-line" d="M -100,-52 l -16,-8 M -94,-70 l -12,-12 M -80,-86 l -6,-15"/>
+              <path class="shock-line" d="M 100,-52 l 16,-8 M 94,-70 l 12,-12 M 80,-86 l 6,-15"/>
+            </g>
+          </g>
+
+          <g id="kon-arm-l" class="arm"><path class="arm-ol"/><path class="arm-fur"/><path class="arm-sock"/><ellipse class="paw" rx="10.5" ry="9"/></g>
+          <g id="kon-arm-r" class="arm"><path class="arm-ol"/><path class="arm-fur"/><path class="arm-sock"/><ellipse class="paw" rx="10.5" ry="9"/></g>
+        </g>
+        <g id="kon-fx"></g>
+      </g>
+
+      <!-- shishi-odoshi: the bamboo "deer scarer" (click it) -->
+      <g id="shishi" class="clickable" aria-label="Bamboo water fountain">
+        <path d="M 236,824 C 230,806 246,792 268,794 C 290,796 302,812 296,828 C 290,840 248,842 236,824 Z" class="c-stone ink"/>
+        <rect x="354" y="806" width="12" height="60" rx="3" class="c-bamboo-dark ink-thin"/>
+        <path d="M 262,800 L 438,808" class="kakehi-ol"/>
+        <path d="M 262,800 L 438,808" class="kakehi"/>
+        <path d="M 300,801.5 v 0.1 M 390,805.5 v 0.1" class="kakehi-node"/>
+        <ellipse cx="438" cy="808" rx="3.5" ry="7" class="c-bamboo-in ink-thin"/>
+        <path d="M 400,912 C 400,882 432,866 472,866 C 514,866 544,882 542,908 C 540,932 510,944 470,944 C 428,944 400,934 400,912 Z" class="c-stone ink"/>
+        <ellipse cx="471" cy="884" rx="52" ry="11" class="c-water ink-thin"/>
+        <path id="basin-ripple" d="M 446,884 Q 471,878 496,884" class="water-hi"/>
+        <path d="M 604,914 C 604,898 616,890 630,890 C 646,890 656,900 654,914 C 652,928 640,932 630,932 C 616,932 604,928 604,914 Z" class="c-stone ink"/>
+        <rect x="540" y="858" width="11" height="84" rx="3" class="c-bamboo-dark ink-thin"/>
+        <g id="shishi-tube" transform="translate(560 870) rotate(18)">
+          <path d="M -128,-11 L 70,-11 Q 76,0 70,11 L -132,11 Z" class="c-bamboo ink"/>
+          <path d="M -60,-11 v 22 M 20,-11 v 22" class="bamboo-node"/>
+          <path d="M -120,-6 L 64,-6" class="bamboo-hi"/>
+          <ellipse cx="-130" cy="0" rx="4" ry="11" class="c-bamboo-in ink-thin"/>
+          <circle r="4" class="c-wood-dark"/>
+        </g>
+        <rect x="566" y="858" width="11" height="84" rx="3" class="c-bamboo ink-thin"/>
+        <g id="water-fx"></g>
+      </g>
+
+      <g id="leaves-fx"></g>
+
+      <!-- a maple branch leaning in from the corner (click to shake) -->
+      <g id="maple" class="clickable" aria-label="Maple branch">
+        <g id="maple-sway">
+          <path d="M 1760,-60 C 1600,20 1460,60 1330,110 C 1240,144 1150,170 1060,186" class="branch"/>
+          <path d="M 1430,74 C 1400,110 1370,150 1310,182" class="branch thin"/>
+          <path d="M 1250,136 C 1210,120 1170,96 1120,92" class="branch thin"/>
+          <path d="M 1580,22 C 1560,70 1540,110 1500,150" class="branch thin"/>
+          <g id="maple-leaves"></g>
+        </g>
+      </g>
+
+      <g id="fx-world"></g>
+    </g>
+  </svg>
+
+  <!-- night: a multiply veil, then the lit things above it -->
+  <div id="night-veil" aria-hidden="true"></div>
+  <svg id="glow" viewBox="0 0 1600 1000" aria-hidden="true">
+    <defs>
+      <radialGradient id="lantern-light" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stop-color="#ffd27a" stop-opacity=".75"/>
+        <stop offset=".35" stop-color="#ffb04a" stop-opacity=".28"/>
+        <stop offset="1" stop-color="#ff9a3a" stop-opacity="0"/>
+      </radialGradient>
+      <radialGradient id="firefly" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stop-color="#fff8c2"/>
+        <stop offset=".3" stop-color="#e9f58a" stop-opacity=".8"/>
+        <stop offset="1" stop-color="#c6e65a" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <g id="glow-world">
+      <path id="moon" d="M 1210,170 a 46,46 0 1 0 40,72 a 36,36 0 1 1 -40,-72 Z" class="moon"/>
+      <circle id="lantern-halo" cx="330" cy="584" r="240" fill="url(#lantern-light)"/>
+      <rect id="lantern-window-lit" x="313" y="563" width="34" height="42" rx="3" fill="url(#window-glow)"/>
+      <path d="M 330,563 V 605 M 313,584 H 347" class="lantern-mullion lit"/>
+      <g id="fireflies"></g>
+    </g>
+  </svg>
+
+  <!-- branding -->
+  <header class="brand">
+    <div class="seal" aria-hidden="true"><span>禅</span><span>道</span></div>
+    <div class="brand-text">
+      <h1 class="wordmark">ZEN<span class="seventy">70</span></h1>
+      <p class="tagline"><span class="zh">禅道</span> <span class="en">a small garden for wandering minds</span></p>
+    </div>
+  </header>
+
+  <!-- what Kon is (supposedly) doing -->
+  <p id="caption" class="caption" aria-hidden="true"><span></span></p>
+
+  <!-- the wish plaque (ema) -->
+  <form id="wish" class="ema" autocomplete="off" novalidate>
+    <span class="ema-cord" aria-hidden="true"></span>
+    <div class="ema-board">
+      <label class="ema-label" for="wish-input"><span class="ema-kanji" aria-hidden="true">願</span> Whisper a wish</label>
+      <input id="wish-input" name="wish" type="text" maxlength="48" enterkeyhint="send"
+             placeholder="Kon promises not to peek…" autocomplete="off" autocorrect="off" spellcheck="false">
+      <span class="ema-hint" aria-hidden="true">press Enter to hang it</span>
+    </div>
+  </form>
+
+  <!-- small corner controls -->
+  <nav class="corner" aria-label="Garden controls">
+    <button id="btn-sound" class="pill" type="button" aria-pressed="false" title="Sound">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" class="ic"/><path class="ic-wave" d="M16 9c1.5 1.5 1.5 4.5 0 6M18.5 6.5c3 3 3 8 0 11"/><path class="ic-off" d="M16 9l5 6M21 9l-5 6"/></svg>
+      <span class="sr-only">Toggle sound</span>
+    </button>
+    <button id="btn-hints" class="pill" type="button" aria-expanded="false" aria-controls="hints" title="Things to try">
+      <span aria-hidden="true">?</span><span class="sr-only">Things to try</span>
+    </button>
+  </nav>
+  <aside id="hints" class="hints" hidden>
+    <h2>Things to try</h2>
+    <ul>
+      <li>Move slowly. Keep going. Then <em>stop</em>.</li>
+      <li>Sneak up on Kon.</li>
+      <li>Write a wish on the plaque, then pause.</li>
+      <li>Boop the nose. Pet the head.</li>
+      <li>Circle Kon, quickly, a few times.</li>
+      <li>Light the lantern. Shake the maple. Tap the bamboo.</li>
+      <li>Leave Kon alone for a while.</li>
+    </ul>
+    <p class="hints-foot">Nothing you type is read or stored. Kon only sees that you are typing.</p>
+  </aside>
+
+  <div id="debug" hidden></div>
+</div>
+<canvas class="grain" id="grain" aria-hidden="true"></canvas>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
