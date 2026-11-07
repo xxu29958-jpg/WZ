@@ -14,7 +14,7 @@ No build step and no dependencies, only Python 3:
 python3 serve.py
 ```
 
-Then open **http://localhost:8070**. Any static server also works; `serve.py` just turns off caching so edits show up on reload.
+Then open **http://localhost:8070**. If that port is already taken, `serve.py` uses the next free one (8071, 8072, …) and prints the address. `python3 serve.py 9000` asks for a specific port. Any static server also works; `serve.py` just turns off caching so edits show up on reload.
 
 Useful URLs:
 
