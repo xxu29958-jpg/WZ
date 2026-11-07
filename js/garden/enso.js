@@ -5,7 +5,7 @@
 // visibility depends only on (bristle, position), the circle can be painted all
 // at once or a little more each frame — the meditation uses the second mode.
 
-import { makeRng, noise1, DEG, TAU } from './math.js';
+import { makeRng, noise1, DEG, TAU } from '../math.js';
 
 const STEPS = 560;
 const BRISTLES = 84;

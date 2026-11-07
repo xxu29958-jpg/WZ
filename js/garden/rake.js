@@ -10,7 +10,7 @@
 // When a stroke ends it is analyzed: a closed loop is a circle to be judged,
 // many turns make a spiral. The result goes to the brain as a 'rake' event.
 
-import { clamp, TAU, wrapAngle } from './math.js';
+import { clamp, TAU, wrapAngle } from '../math.js';
 
 const SAND_TOP = 714;            // world y where the raked sand begins
 const TINE_GAP = 7;              // world units between the rake's tines

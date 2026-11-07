@@ -5,11 +5,8 @@
 // Any movement and the fresh ink evaporates. At satori the stroke turns gold,
 // a soft aura pulses behind Kon, motes of light rise, and a 悟 seal is stamped.
 
-import { clamp, lerp, smoothstep, DEG } from './math.js';
-
-const NS = 'http://www.w3.org/2000/svg';
-const $ = (id) => document.getElementById(id);
-const f2 = (v) => v.toFixed(2);
+import { clamp, lerp, smoothstep, DEG } from '../math.js';
+import { NS, $, f2 } from '../util.js';
 
 export class ZenFX {
   constructor({ scene, brush, reducedMotion = false, rng = Math.random }) {

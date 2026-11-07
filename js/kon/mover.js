@@ -7,8 +7,8 @@
 // It reports footfalls and landings so the rig can squash and the sand can
 // take paw prints. Pure logic — no DOM — so tests can drive it too.
 
-import { clamp, lerp } from './math.js';
-import { depthScale, planPath, pushOut, clampToBounds, PLATFORMS } from './world.js';
+import { clamp, lerp } from '../math.js';
+import { depthScale, planPath, pushOut, clampToBounds, PLATFORMS } from '../garden/world.js';
 
 /** speed (world units/s at depthScale 1), stride per step, and how hard it can accelerate */
 export const GAITS = {

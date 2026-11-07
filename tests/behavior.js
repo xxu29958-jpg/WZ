@@ -1,12 +1,12 @@
 // Behavior tests: drive the Brain with simulated pointer and typing input
 // (no DOM, deterministic random numbers) and check the state transitions.
 
-import { Brain } from '../js/brain.js';
+import { Brain } from '../js/kon/brain.js';
 import { makeRng } from '../js/math.js';
-import { PLACES } from '../js/scene.js';
-import { analyzeStroke } from '../js/rake.js';
-import { Mover } from '../js/mover.js';
-import { bodyAt, isFree, planPath, POIS, OBSTACLES } from '../js/world.js';
+import { PLACES } from '../js/garden/world.js';
+import { analyzeStroke } from '../js/garden/rake.js';
+import { Mover } from '../js/kon/mover.js';
+import { bodyAt, isFree, planPath, POIS, OBSTACLES } from '../js/garden/world.js';
 import { TAU } from '../js/math.js';
 
 const HEAD = { x: 800, y: 612 };
