@@ -12,8 +12,9 @@ const $ = (id) => document.getElementById(id);
 const f2 = (v) => v.toFixed(2);
 
 export class ZenFX {
-  constructor({ scene, brush, reducedMotion = false }) {
+  constructor({ scene, brush, reducedMotion = false, rng = Math.random }) {
     this.scene = scene;
+    this.rng = rng;
     this.brush = brush;
     this.reduced = reducedMotion;
     this.live = $('enso-live');
@@ -189,14 +190,14 @@ export class ZenFX {
     if (rate && this.moteT <= 0 && this.motes.length < 30) {
       const el = document.createElementNS(NS, 'circle');
       el.setAttribute('class', 'mote');
-      el.setAttribute('r', f2(1.6 + Math.random() * 2.2));
+      el.setAttribute('r', f2(1.6 + this.rng() * 2.2));
       this.aura.appendChild(el);
       this.motes.push({
-        el, t: 0, life: 2.6 + Math.random() * 1.8,
-        x: center.x + (Math.random() * 2 - 1) * 150,
-        y: center.y + 90 + Math.random() * 30,
-        vx: (Math.random() * 2 - 1) * 8, vy: -(30 + Math.random() * 30),
-        seed: Math.random() * 10,
+        el, t: 0, life: 2.6 + this.rng() * 1.8,
+        x: center.x + (this.rng() * 2 - 1) * 150,
+        y: center.y + 90 + this.rng() * 30,
+        vx: (this.rng() * 2 - 1) * 8, vy: -(30 + this.rng() * 30),
+        seed: this.rng() * 10,
       });
       this.moteT = rate;
     }

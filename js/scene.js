@@ -74,7 +74,7 @@ export class Scene {
     this.buildSand();
     this.buildMaple();
     this.buildFireflies();
-    this.zen = new ZenFX({ scene: this, brush: this.brush, reducedMotion });
+    this.zen = new ZenFX({ scene: this, brush: this.brush, reducedMotion, rng });
     this.rake = new SandRake({ canvas: $('sand-canvas'), scene: this, emit: (ev) => this.emit(ev) });
     this.cursorGlow = { x: 0, y: 0, trail: [], on: false, built: false };
     // depth: scenery that stands on the ground, sorted by where it meets the ground
