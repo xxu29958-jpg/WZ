@@ -30,6 +30,7 @@ import { Life } from './life.js';
 import { Social } from './social.js';
 import { Stillness } from './stillness.js';
 import { Play } from './play.js';
+import { Visitors } from './visitors.js';
 
 export function neutralPose() {
   return {
@@ -55,7 +56,7 @@ export function neutralPose() {
 
 // narrator keys that map to a different voice key, and voice lines that may interrupt
 const VOICE_ALIAS = { lifeRack: 'readPlaques', classic: 'startled', cover: 'startled', pout: 'startled', bleh: 'startled', admireAfter: 'typingStop' };
-const URGENT_VOICE = new Set(['startled', 'gotcha', 'sneeze', 'booped', 'satoriEnd', 'pounceMiss', 'typingWalk', 'typingStop']);
+const URGENT_VOICE = new Set(['startled', 'gotcha', 'sneeze', 'booped', 'satoriEnd', 'pounceMiss', 'pounceBird', 'birdEscaped', 'typingWalk', 'typingStop']);
 const REACTIVE = new Set(['IDLE', 'WATCH', 'PRETENDING', 'RESUMING', 'RELAXING', 'DROWSY']);
 const ACTIVITY_EVENTS = new Set(['down', 'tap', 'focus', 'input', 'boop', 'pat', 'rakeStart', 'submit']);
 
@@ -501,6 +502,19 @@ export class Brain {
       case 'clack':
         this.onClack(ev);
         break;
+      case 'birdArrive':
+        if (this.state === 'IDLE' && !this.life.act && !this.greet && !asleep) {
+          this.say('birdArrive');
+          this.flash = { x: ev.x ?? 800, y: ev.y ?? 300, until: this.now + 0.8 };
+        }
+        break;
+      case 'birdLand':
+        if (ev.perch === 'kon' && this.state === 'ZAZEN') this.say('birdOnHead', true);
+        else if (ev.perch === 'kon' && asleep) this.impulse({ type: 'earFlick', side: 'l', s: 0.5 });
+        break;
+      case 'birdChirp':
+        if (!asleep && this.reactive()) this.impulse({ type: 'earFlick', side: ev.x < (s.self ? s.self.x : 800) ? 'l' : 'r', s: 0.35 });
+        break;
       case 'night':
         if (!asleep) {
           this.flash = { x: s.places.lantern.x, y: s.places.lantern.y, until: this.now + 1.6, sparkle: ev.on };
@@ -583,4 +597,4 @@ export class Brain {
 }
 
 // The states live in focused modules; their methods join the Brain class here.
-mixin(Brain, Life, Social, Stillness, Play);
+mixin(Brain, Life, Social, Stillness, Play, Visitors);

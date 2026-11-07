@@ -143,6 +143,19 @@ html, body {
 .c-tree-far { fill: var(--tree-far); }
 .c-tree-near { fill: var(--tree-near); }
 .c-bloom { fill: #8d7fd6; }
+/* the sparrow (a little round one; its outline is thinner than the props', it is small) */
+.sparrow .ink-thin { stroke-width: 1.4; }
+.bird-body { fill: #b07a4f; }
+.bird-tail { fill: #6f4429; }
+.bird-wing { fill: #7d4e2e; }
+.bird-belly { fill: #efe2c9; }
+.bird-head { fill: #b07a4f; }
+.bird-cap { fill: #7a4126; }
+.bird-cheek { fill: #f7f0e3; }
+.bird-beak { fill: #3a2417; }
+.bird-eye { fill: #1d120c; }
+.bird-glint { fill: #fff; }
+.bird-legs { stroke: #5d3d27; stroke-width: 1.3; stroke-linecap: round; fill: none; }
 .c-snail { fill: #e8cfa6; }
 .c-shell { fill: #c78a52; }
 

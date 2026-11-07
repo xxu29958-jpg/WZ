@@ -239,6 +239,51 @@ def mobile_touch(p):
     return mode == "tall" and patted and judged and not overflow and not probs, f"mode={mode} patted={patted} judged={judged} overflow={overflow} layout={probs or 'ok'}"
 
 
+def sparrow_hunt_and_scare(p):
+    p.load("motion=full")
+    time.sleep(2)
+    # 1) a sparrow on the sand: Kon creeps up and pounces; the bird gets away
+    # (it may spot Kon creeping and leave early — the unit tests cover that; here it stays put)
+    p.js("const z = window.__zen; z.brain.zenArmed = false; z.birds.sneakNotice = 0; z.birds.visit('sand', {x: 1125, y: 958});")
+    p.ff.pointer_path([(20, 20)], 0)   # cursor parked in a corner, out of the way
+    crept = p.wait_for("(() => { const a = window.__zen.brain.life.act; return a && a.id === 'bird' && window.__zen.mover.state().gait === 'sneak' && window.__zen.mover.state().moving; })()", 10)
+    time.sleep(0.8)
+    p.shot("sparrow-creep")
+    probs = []
+    p.check_layout("creeping up on the sparrow", probs)
+    pounced = p.wait_for("window.__zen.brain.state === 'POUNCE'", 12)
+    escaped = p.wait_for("window.__zen.birds.state === 'flyAway' || window.__zen.birds.state === 'away'", 4)
+    why = p.js("return window.__zen.birds.lastFlee")
+    time.sleep(1.2)
+    p.shot("sparrow-after")
+    p.check_layout("after the pounce", probs)
+    p.wait_for("window.__zen.birds.state === 'away'", 4)
+    # 2) a sparrow on the lantern: a quick swipe of the real mouse sends it off
+    p.wait_for("window.__zen.brain.state === 'IDLE'", 6)
+    p.js("window.__zen.birds.visit('lantern')")
+    landed = p.wait_for("window.__zen.birds.state === 'perched'", 6)
+    bx, by = p.screen(351, 500)
+    pts = [(bx + 260 - i * 13, by + 60 - i * 3) for i in range(21)]
+    p.ff.pointer_path(pts, duration_ms=250)
+    scared = p.wait_for("window.__zen.birds.state !== 'perched'", 1.5)
+    ok = crept and pounced and escaped and landed and scared and not probs
+    return ok, f"crept={crept} pounced={pounced} bird escaped={escaped} ({why}); lantern landing={landed} swipe scared it={scared}; layout={probs or 'ok'}"
+
+
+def sparrow_touch(p):
+    p.load("motion=full", wait=1.5)
+    vb = p.js("const v = window.__zen.scene.vb; return [v.x, v.w]")
+    spot = {"x": vb[0] + vb[1] * 0.72, "y": 955}
+    p.js("const z = window.__zen; z.brain.zenArmed = false; z.birds.visit('sand', arguments[0]);", spot)
+    landed = p.wait_for("window.__zen.birds.state === 'perched'", 6, every=0.05)
+    sx, sy = p.screen(spot["x"], spot["y"] - 12)
+    on_screen = 0 <= sx <= p.w and 0 <= sy <= p.h
+    p.shot("sparrow-phone")
+    p.ff.tap(sx, sy)
+    scared = p.wait_for("window.__zen.birds.state !== 'perched'", 1.2)
+    return landed and on_screen and scared, f"landed={landed} on screen at ({sx:.0f},{sy:.0f})={on_screen} tap scared it={scared}"
+
+
 SCENARIOS = {
     "watch": (watch_stop_resume, "1440x900"),
     "startle": (rush_startle, "1440x900"),
@@ -247,7 +292,9 @@ SCENARIOS = {
     "pounce": (stalk_and_pounce, "1440x900"),
     "leaf": (maple_leaf_chase, "1440x900"),
     "night": (lantern_night, "1440x900"),
+    "sparrow": (sparrow_hunt_and_scare, "1440x900"),
     "mobile": (mobile_touch, "390x844"),
+    "sparrow-touch": (sparrow_touch, "390x844"),
 }
 
 
@@ -281,7 +328,7 @@ def main():
                 except Exception as e:  # noqa: BLE001
                     ok, info = False, f"crashed: {e}"
                 failed += 0 if ok else 1
-                print(f"{'PASS' if ok else 'FAIL'}  {n:8s} [{size}]  {info}", flush=True)
+                print(f"{'PASS' if ok else 'FAIL'}  {n:13s} [{size}]  {info}", flush=True)
     sys.exit(1 if failed else 0)
 
 

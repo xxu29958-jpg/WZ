@@ -561,6 +561,7 @@ export class Social {
       return;
     }
     const lt = t - a.landT;
+    if (a.target === 'bird') { this.pounceBirdAfter(lt, s, P); return; }
     if (a.target === 'leaf') {
       // the leaf leaps away: Kon is delighted anyway
       const leaf = (s.objects || []).find((o) => o.kind === 'leaf');

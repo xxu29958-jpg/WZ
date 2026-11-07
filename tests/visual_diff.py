@@ -24,6 +24,8 @@ DEMOS = {
     "judge": "?demo=judge&t=5.2",
     "night": "?demo=night",
     "mobile": "?demo=at&to=basin&t=2|390x844",
+    "sparrow": "?demo=sparrow&perch=lantern&t=7",
+    "sparrow-head": "?demo=sparrow-head",
 }
 
 

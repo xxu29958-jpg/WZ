@@ -69,7 +69,10 @@ export class Scene {
     this.depthEl = $('depth');
     this.sortables = Object.entries(SORT_Y).map(([id, y]) => ({ id, y, el: $(id) })).sort((a, b) => a.y - b.y);
     for (const o of this.sortables) this.depthEl.appendChild(o.el);
-    this.konBefore = null;
+    this.depthSig = '';
+    this.auraEl = $('aura');
+    this.konEl = $('kon');
+    this.visitor = null;
     this.konAt = { x: 800, y: 826, seat: 'cushion' };
     // camera: pans to follow Kon; far layers drift less (parallax)
     this.camX = 0;
@@ -252,17 +255,23 @@ export class Scene {
   }
 
   /** Re-sort Kon among the scenery and remember where Kon is (camera, caption). */
+  /**
+   * Kon (with its aura) and any visitor (the sparrow: anything with `el` and
+   * `depthKey(konKey)`) are slotted between the scenery by where they meet the ground.
+   */
   placeKon(st) {
     this.konAt = st;
-    const key = st.seat ? SORT_Y[st.seat] + 0.5 : st.y;
-    const next = this.sortables.find((o) => o.y > key);
-    const id = next ? next.id : 'end';
-    if (id !== this.konBefore) {
-      this.konBefore = id;
-      const before = next ? next.el : null;
-      this.depthEl.insertBefore($('aura'), before);
-      this.depthEl.insertBefore($('kon'), before);
-    }
+    const konKey = st.seat ? SORT_Y[st.seat] + 0.5 : st.y;
+    const items = [{ key: konKey, els: [this.auraEl, this.konEl] }];
+    const v = this.visitor;
+    if (v && v.el && v.el.style.display !== 'none') items.push({ key: v.depthKey(konKey), els: [v.el] });
+    items.sort((a, b) => a.key - b.key);
+    const slots = items.map((it) => this.sortables.find((o) => o.y > it.key) || null);
+    const sig = items.map((it, i) => `${it.els[it.els.length - 1].id}<${slots[i] ? slots[i].id : 'end'}`).join(' ');
+    if (sig === this.depthSig) return;
+    this.depthSig = sig;
+    // inserting in key order before each slot keeps items that share a slot in order too
+    items.forEach((it, i) => { for (const el of it.els) this.depthEl.insertBefore(el, slots[i] ? slots[i].el : null); });
   }
 
   /** The narrator's line follows Kon around, just below its feet. */

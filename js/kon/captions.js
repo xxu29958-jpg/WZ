@@ -91,4 +91,14 @@ export const CAPTIONS = {
   pounceMiss: ['Nothing there. Kon meant to do that.', 'Kon was only stretching.'],
   pounceLeaf: ['Kon caught a leaf. Briefly.', 'The leaf escapes. Kon is delighted.'],
   judgeWalk: ['Kon goes to look at your circle.', 'Kon will be the judge of that.'],
+
+  // the sparrow
+  birdArrive: ['A sparrow drops by.', 'A small visitor with wings.'],
+  birdHunt: ['Kon has spotted a sparrow.', 'Kon goes very low and very quiet.'],
+  birdWatch: ['Kon is watching the sparrow. Intensely.', 'Kon would like a word with that bird.'],
+  birdChatter: ['Kon chatters at the bird.', 'Kon is making little clicking noises.'],
+  birdEscaped: ['The sparrow saw Kon coming.', 'The sparrow leaves. Kon was not hunting anyway.'],
+  birdGone: ['The sparrow flies off.', 'And it’s gone.'],
+  pounceBird: ['The sparrow wins. Again.', 'Kon catches a pawful of air.'],
+  birdOnHead: ['A sparrow lands on Kon. Kon is a rock now.', 'Kon has a hat. Kon must not move.'],
 };

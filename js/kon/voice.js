@@ -51,6 +51,14 @@ export const VOICE = {
   lifeMaple: { chance: 0.5, lines: ['One… two… many.', 'So many leaves.'] },
   lifeSniff: { chance: 0.4, lines: ['Sniff sniff.', 'What’s this?'] },
   stalk: { chance: 0.6, lines: ['…', 'Shhh.'] },
+
+  birdHunt: { chance: 0.5, lines: ['Birdie…', 'Sneak, sneak…'] },
+  birdWatch: { chance: 0.5, lines: ['Hey, bird.', 'Come down here…'] },
+  birdChatter: { chance: 0.9, lines: ['Ek-ek-ek-ek!', 'Kekekeke!'] },
+  birdEscaped: { chance: 0.8, lines: ['Aw, come back!', 'I was just looking!'] },
+  birdGone: { chance: 0.5, lines: ['Bye, bird.', 'Aww.'] },
+  pounceBird: { chance: 1, lines: ['Next time, bird!', 'I almost had it!'] },
+  birdOnHead: { chance: 0.7, lines: ['(Don’t move. Don’t move.)', '(Is that… a bird?)'] },
 };
 
 /** How long a line stays up: a moment for "Eep!", longer for a sentence. */

@@ -21,6 +21,7 @@ import { arrive, touch, saveMemory } from './memory.js';
 import { DOODLE_KINDS } from './garden/rake.js';
 import { Mover } from './kon/mover.js';
 import { depthScale } from './garden/world.js';
+import { Birds, birdContext } from './garden/birds.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');
@@ -67,11 +68,15 @@ input = new InputTracker({
 const rig = new FoxRig($('kon'), { reducedMotion: reduced(), rng: rngFor(1) });
 const mover = new Mover({ seat: 'cushion' });
 const brain = new Brain({ reducedMotion: reduced(), rng: rngFor(2) });
+// a sparrow drops by now and then (scripted checks call it in with ?birds or __zen.birds.visit())
+const birds = new Birds({ parent: $('depth'), rng: rngFor(5), reduced: reduced(), auto: !manual || params.has('birds') });
+scene.visitor = birds;
 
 reducedMQ.addEventListener?.('change', () => {
   rig.setReducedMotion(reduced());
   brain.reduced = reduced();
   scene.reduced = reduced();
+  birds.reduced = reduced();
 });
 
 // --- touching Kon directly: boop the nose, pat the head ---
@@ -230,6 +235,8 @@ function tick(dt, ts) {
   senses.self = mover.state();
   senses.body = rig.measure();
   senses.objects = scene.objects();
+  const bird = birds.object();
+  if (bird) senses.objects.push(bird);
   senses.places = scene.places;
   senses.night = scene.night;
   senses.layout = scene.mode;
@@ -255,9 +262,15 @@ function tick(dt, ts) {
     else if (em.type === 'snailPoke') scene.hideSnail();
   }
   rig.update(dt, pose, where);
+  const body = rig.measure();
+  const clack = senses.events.some((e) => e.type === 'clack');
+  for (const ev of birds.update(dt, birdContext({ brain, kon: where, body, view: scene.vb, pointer: senses.pointer, clack, night: scene.night }))) {
+    if (ev.type === 'birdFlee' || ev.type === 'birdArrive') sound.play('flutter', ev.type === 'birdFlee' ? 1 : 0.6);
+    else if (ev.type === 'birdChirp') sound.play('chirp');
+    input.push(ev);
+  }
   scene.placeKon(where);
   scene.update(dt);
-  const body = rig.measure();
   scene.zen.update(dt, brain.zenInfo(), body.center);
   scene.updateCursor(dt, input.pointer);
   updateCaption();
@@ -277,7 +290,7 @@ function tick(dt, ts) {
   }
 }
 
-const zen = { brain, rig, scene, input, sound, mover };
+const zen = { brain, rig, scene, input, sound, mover, birds };
 
 if (manual) {
   // Test mode: time only moves when a script calls __zen.advance(seconds, fn).

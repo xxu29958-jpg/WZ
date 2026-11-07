@@ -193,6 +193,7 @@ export class FoxRig {
   measure() {
     return {
       head: this.headToWorld(0, -8),
+      crown: this.headToWorld(-16, -62),   // top of the head, between the ears
       nose: this.headToWorld(this.g.faceX * 1.3, 22 + this.g.faceY),
       restHead: this.localToWorld({ x: 0, y: -150 + this.g.upperY }),
       mouth: this.headToWorld(this.g.faceX, 34 + this.g.faceY),
