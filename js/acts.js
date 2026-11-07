@@ -352,6 +352,142 @@ export const ACTS = {
   },
 };
 
+// ---------------- the stillness test: Kon tries to make you flinch ----------------
+
+Object.assign(ACTS, {
+  temptWave: {
+    caption: 'temptWave',
+    pose(t, P) {
+      P.gaze = null;
+      P.headFollow = 0;
+      P.smile = 0.75;
+      P.eyeOpen = 1.06;
+      P.earPerk = 0.6;
+      P.browL = P.browR = 0.5;
+      const w = Math.sin(t * 11);
+      P.armR = { x: 72 + w * 9, y: -46, space: 'head' };
+      P.tilt = w * 4;
+      P.tailAmp = 0.5;
+      P.tailSpeed = 1.6;
+    },
+  },
+
+  temptFaces: {
+    caption: 'temptFaces',
+    pose(t, P, c) {
+      const n = c.body().nose;
+      P.gaze = { x: n.x, y: n.y + 6 };
+      P.headFollow = 0;
+      P.tongue = 1;
+      P.mouthOpen = 0.1;
+      P.earL = Math.sin(t * 9) * 22;
+      P.earR = -Math.sin(t * 9) * 22;
+      P.browL = Math.sin(t * 6) * 0.8;
+      P.browR = -Math.sin(t * 6) * 0.8;
+      P.eyeOpen = 1.1;
+      P.tilt = Math.sin(t * 3) * 8;
+    },
+  },
+
+  temptPeekaboo: {
+    caption: 'temptPeekaboo',
+    pose(t, P) {
+      P.gaze = null;
+      P.headFollow = 0;
+      const hide = t % 1.5 < 0.9;
+      if (hide) {
+        P.armL = { x: -36, y: -2, space: 'head' };
+        P.armR = { x: 36, y: -2, space: 'head' };
+        P.shutL = P.shutR = 1;
+        P.shutStyle = 'squeeze';
+      } else {
+        P.armL = { x: -76, y: -40, space: 'head' };
+        P.armR = { x: 76, y: -40, space: 'head' };
+        P.eyeOpen = 1.2;
+        P.smile = 1;
+        P.mouthOpen = 0.4;
+        P.earPerk = 1;
+      }
+    },
+  },
+
+  temptDance: {
+    caption: 'temptDance',
+    pose(t, P, c) {
+      const b = Math.sin(t * 7);
+      P.gaze = null;
+      P.headFollow = 0;
+      P.lean = b * 6;
+      P.tilt = -b * 8;
+      P.armL = { x: -56, y: -100 - Math.max(0, b) * 22, space: 'body' };
+      P.armR = { x: 56, y: -100 - Math.max(0, -b) * 22, space: 'body' };
+      P.smile = 0.9;
+      P.shutL = P.shutR = 1;
+      P.shutStyle = 'happy';
+      P.tailAmp = 0.9;
+      P.tailSpeed = 2.6;
+      P.crouch = Math.abs(b) * 0.12;
+      c.once('sfx', () => c.emit('sfx', 'whistle'));
+    },
+  },
+
+  // ---------------- hello again ----------------
+
+  greetWave: {
+    pose(t, P) {
+      P.gaze = null;
+      P.headFollow = 0;
+      P.smile = 0.7;
+      P.eyeOpen = 1.05;
+      P.earPerk = 0.6;
+      P.blush = 0.35;
+      P.tailAmp = 0.6;
+      P.tailSpeed = 1.8;
+      if (t < 1.7) {
+        const w = Math.sin(t * 10);
+        P.armR = { x: 70 + w * 8, y: -44, space: 'head' };
+        P.tilt = w * 3;
+      }
+    },
+  },
+
+  greetBow: {
+    pose(t, P) {
+      P.gaze = null;
+      P.headFollow = 0;
+      P.armL = GASSHO_L;
+      P.armR = GASSHO_R;
+      const b = bump(0.3, 1.7, t);
+      P.pitch = 0.55 * b;
+      P.reachY = 8 * b;
+      P.shutL = P.shutR = b;
+      P.shutStyle = 'calm';
+      P.smile = 0.5;
+    },
+  },
+
+  doodleProud: {
+    pose(t, P, c) {
+      P.gaze = c.place('doodle');
+      P.headFollow = 0.8;
+      P.bodyFollow = 0.2;
+      P.smile = 0.8;
+      P.blush = 0.4;
+      P.tilt = 6;
+      P.earPerk = 0.5;
+      P.tailAmp = 0.5;
+      if (t > 1.3) {
+        P.gaze = null;
+        P.headFollow = 0;
+        P.shutL = P.shutR = 1;
+        P.shutStyle = 'happy';
+      }
+    },
+  },
+});
+
+export const TEMPT_ACTS = ['temptWave', 'temptFaces', 'temptPeekaboo', 'temptDance'];
+
 export const PRETEND_ACTS = ['meditate', 'whistle', 'groom', 'flower', 'sky', 'fakesleep'];
 export const IDLE_ACTS = [
   ['lookAround', 3, 4.6],

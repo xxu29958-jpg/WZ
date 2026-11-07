@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Capture verification screenshots of scripted demos with headless Firefox.
-# Usage: tests/screenshots.sh [outdir]   (the dev server must be running on :8070)
+# Usage: PORT=8070 tests/screenshots.sh [outdir]   (the dev server must be running)
 set -euo pipefail
 OUT="${1:-docs/screenshots}"
 mkdir -p "$OUT"
@@ -8,7 +8,7 @@ OUT="$(cd "$OUT" && pwd)"   # Firefox needs an absolute path
 PROFILE="$(mktemp -d)"
 shot() { # name url width height
   timeout 60 firefox --headless --no-remote --profile "$PROFILE" --window-size="$3,$4" \
-    --screenshot "$OUT/$1.png" "http://localhost:8070/$2" >/dev/null 2>&1 || true
+    --screenshot "$OUT/$1.png" "http://localhost:${PORT:-8070}/$2" >/dev/null 2>&1 || true
   if [ -s "$OUT/$1.png" ]; then echo "  ok  $1"; else echo "  FAILED  $1"; fi
 }
 D=1440; DH=900; M=390; MH=844
@@ -31,6 +31,13 @@ shot desktop-pet            "?demo=pet"                           $D $DH
 shot desktop-boop           "?demo=boop"                          $D $DH
 shot desktop-admire         "?demo=admire"                        $D $DH
 shot desktop-night          "?demo=night"                         $D $DH
+shot desktop-tempt          "?demo=tempt"                         $D $DH
+shot desktop-zazen          "?demo=zazen&t=0.6"                   $D $DH
+shot desktop-satori         "?demo=satori"                        $D $DH
+shot desktop-gotcha         "?demo=gotcha"                        $D $DH
+shot desktop-judge          "?demo=judge"                         $D $DH
+shot desktop-doodle         "?demo=doodle&visits=3&away=5"        $D $DH
+shot desktop-dusk           "?demo=idle&hour=18"                  $D $DH
 shot mobile-idle            "?demo=idle"                          $M $MH
 shot mobile-peek            "?demo=peek"                          $M $MH
 shot mobile-typing          "?demo=typing"                        $M $MH

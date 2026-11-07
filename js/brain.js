@@ -12,11 +12,16 @@
 //   RESUMING    side-eyeing out of the act before watching again
 //   STARTLED    caught by an approaching cursor (four escalating variants)
 //   RELAXING    exhale, settle back to neutral
-//   DROWSY → SLEEPING → WAKING   after a long quiet spell
+//   ZAZEN       true meditation, reached by staying perfectly still. Kon first
+//               tries to make you flinch (GOTCHA if you do), then the ensō
+//               paints itself; any input breaks it
+//   SATORI      enlightenment: Kon floats for a few seconds, then drops
+//   DROWSY → SLEEPING → WAKING   after enlightenment wears Kon out
+//   JUDGE       grading a circle you raked in the sand
 //   DIZZY, PETTED, BOOPED, ADMIRE   easter-egg reactions
 
 import { clamp, lerp, smoothstep, bump, damp, Bag, randRange, pick, TAU, wrapAngle } from './math.js';
-import { ACTS, PRETEND_ACTS, IDLE_ACTS } from './acts.js';
+import { ACTS, PRETEND_ACTS, IDLE_ACTS, TEMPT_ACTS } from './acts.js';
 import { CAPTIONS } from './captions.js';
 
 export function neutralPose() {
@@ -33,12 +38,16 @@ export function neutralPose() {
     armL: null, armR: null,
     tailAmp: 0.15, tailSpeed: 0.6, tailBase: 0, tailCurl: 0,
     breath: 1, snap: 0, blink: true, sleepy: false,
+    float: 0, sign: null,
     fx: { notes: 0, zzz: 0, bubble: 0, hearts: 0 },
     impulses: [],
   };
 }
 
 const REACTIVE = new Set(['IDLE', 'WATCH', 'PRETENDING', 'RESUMING', 'RELAXING', 'DROWSY']);
+const ZAZEN_AFTER = 7;      // seconds of total stillness before true meditation begins
+const PAINT_SECONDS = 16;   // how long the ensō takes to paint itself
+const ACTIVITY_EVENTS = new Set(['down', 'tap', 'focus', 'input', 'boop', 'pat', 'rakeStart', 'submit']);
 const STARTLE_VARIANTS = ['classic', 'cover', 'pout', 'bleh'];
 
 export class Brain {
@@ -91,6 +100,27 @@ export class Brain {
     this.lastLines = {};
     this.history = [];
     this.emits = [];
+
+    this.zen = null;           // progress of the current meditation
+    this.zenArmed = true;      // re-armed by any activity after a satori
+    this.zenBreak = false;
+    this.satoriCount = 0;
+    this.temptBag = new Bag(TEMPT_ACTS, rng);
+    this.greet = null;         // a hello queued for a returning visitor
+  }
+
+  /** What the garden needs to know to paint the live ensō. */
+  zenInfo() {
+    const st = this.state;
+    return {
+      state: st,
+      paint: st === 'ZAZEN' && this.zen ? this.zen.paint : st === 'SATORI' ? 1 : 0,
+      satoriCount: this.satoriCount,
+    };
+  }
+
+  sayText(text, key = 'custom') {
+    this.caption = { text, key, at: this.now };
   }
 
   // ------------------------------------------------------------------ helpers
@@ -141,6 +171,7 @@ export class Brain {
       once: (key, fn) => { if (!done.has(key)) { done.add(key); fn(); } },
       emit: (type, data) => this.emit(type, data),
       impulse: (imp) => this.impulse(imp),
+      body: () => this.s.body,
       spots: this.lookSpots(),
       ...extra,
     };
@@ -221,7 +252,10 @@ export class Brain {
     const ty = s.typing;
     this.typeStill = now - Math.max(ty.lastInput, ty.lastKey ?? -1e9);
     this.typeActive = ty.focused && this.typeStill < 0.5;
-    if (this.ptrActive || this.typeActive) this.lastActive = now;
+    if (this.ptrActive || this.typeActive) {
+      this.lastActive = now;
+      this.zenArmed = true;
+    }
     this.idleFor = now - this.lastActive;
 
     // interest grows independently for each source
@@ -360,7 +394,40 @@ export class Brain {
 
   onEvent(ev, s) {
     const asleep = this.state === 'SLEEPING';
+    if (ACTIVITY_EVENTS.has(ev.type)) {
+      this.zenArmed = true;
+      if (this.state === 'ZAZEN') this.zenBreak = true;
+    }
     switch (ev.type) {
+      case 'rakeStart':
+        this.lastActive = this.now;
+        if (asleep || this.state === 'DROWSY') this.go('WAKING');
+        break;
+      case 'rakeEnd':
+        this.lastActive = this.now;
+        if (['SATORI', 'SLEEPING', 'WAKING', 'STARTLED'].includes(this.state)) break;
+        if (ev.shape === 'circle') this.go('JUDGE', { score: ev.score, x: ev.x, y: ev.y });
+        else if (ev.shape === 'spiral' && !this.reduced) this.go('DIZZY', { spiral: true });
+        break;
+      case 'arrive': {
+        const n = ev.visits || 1;
+        if (n >= 2) {
+          let text;
+          if (ev.awayHours > 20) text = 'Kon kept your spot warm. For hours. (Kon did not move.)';
+          else if (n === 2) text = 'You came back. Kon pretends not to be happy about it.';
+          else if (n < 6) text = `Visit ${n}. Kon has stopped counting. (Kon has not stopped counting.)`;
+          else text = `Visit ${n}. A regular. Kon bows. Slightly.`;
+          this.greet = { at: 1.0, kind: n >= 6 ? 'greetBow' : 'greetWave', text, doodle: !!ev.doodle };
+        } else if (ev.doodle) {
+          this.greet = { at: 1.0, kind: 'doodleProud', text: 'Kon raked you a little something.', doodle: false };
+        }
+        break;
+      }
+      case 'daytime':
+        if (ev.period === 'night') this.say('lateNight', true);
+        else if (ev.period === 'dusk') this.say('dusk', true);
+        else if (ev.period === 'dawn') this.say('dawn', true);
+        break;
       case 'boop':
         this.lastActive = this.now;
         if (asleep) this.go('WAKING', { boop: true });
@@ -461,7 +528,23 @@ export class Brain {
     if (this.ptrActive && this.ptrBurst > 0.08) { this.go('WATCH', { from: 'idle' }); return; }
     const fresh = s.typing.focused && this.now - s.typing.focusAt < 3;
     if (this.typeActive || (fresh && this.typeI > 0.24)) { this.go('WATCH', { from: 'idle' }); return; }
-    if (this.idleFor > 26 && !this.idleAct) { this.go('DROWSY'); return; }
+    // enlightenment is exhausting
+    if (this.arg.afterSatori && this.idleFor > 26 && this.stateT > 6 && !this.idleAct) { this.go('DROWSY'); return; }
+    if (!this.zenArmed && !this.arg.afterSatori && this.idleFor > 40 && !this.idleAct) { this.go('DROWSY'); return; }
+    // perfect stillness → true meditation
+    if (this.zenArmed && this.idleFor > ZAZEN_AFTER && this.stateT > 1 && !s.typing.focused && !this.greet) {
+      const act = this.idleAct ? this.idleAct.name : '';
+      if (!act || ['lookAround', 'viewer', 'earTwitch', 'meditateAttempt'].includes(act)) { this.go('ZAZEN'); return; }
+    }
+
+    // a returning visitor gets a hello
+    if (this.greet && this.stateT > this.greet.at && !this.idleAct) {
+      const g = this.greet;
+      this.idleAct = this.makeAct(g.kind, { dur: g.kind === 'doodleProud' ? 2.8 : 2.4 });
+      this.sayText(g.text, 'greet');
+      this.greet = g.doodle ? { at: this.stateT + 2.6, kind: 'doodleProud', text: 'While you were away, Kon raked you a little something.', doodle: false } : null;
+      this.lastActive = Math.max(this.lastActive, this.now - 2);
+    }
 
     if (!this.idleAct && this.stateT > this.nextIdleAt) {
       let name = this.idleBag.next(this.idleFor < 10 ? ['yawn'] : []);
@@ -579,7 +662,8 @@ export class Brain {
 
     // narrator
     const label = c < 0.3 ? 'OBSERVING' : c < 0.66 ? 'CURIOUS' : 'PEEKING';
-    if (label !== this.label && this.now - this.labelAt > 1.3) {
+    // never talk over a line that was just said (e.g. "So close.")
+    if (label !== this.label && this.now - this.labelAt > 1.3 && this.now - this.caption.at > 1.4) {
       this.label = label;
       this.labelAt = this.now;
       const key = (src === 'typing' ? 'typing' : '') + (src === 'typing' ? label[0] + label.slice(1).toLowerCase() : label.toLowerCase());
@@ -960,8 +1044,8 @@ export class Brain {
   }
 
   // ------------------------------------------------------------------ easter eggs
-  enterDIZZY() {
-    this.say('dizzy', true);
+  enterDIZZY(arg) {
+    this.say(arg.spiral ? 'spiral' : 'dizzy', true);
     this.emit('sfx', 'dizzy');
     this.act = null;
   }
@@ -1127,6 +1211,199 @@ export class Brain {
     }
     if (t > 3.4) {
       this.go('PRETENDING', { act: 'whistle', caption: 'admireAfter', blush: 0.7, sweat: true });
+    }
+  }
+
+  // ------------------------------------------------------------------ ZAZEN / SATORI / GOTCHA
+  enterZAZEN() {
+    this.zen = { paint: 0, temptAt: randRange(this.rng, 1.2, 2.6), tempt: null, temptEnd: 0, settleAt: 0, said: {} };
+    this.idleAct = null;
+    this.zenBreak = false;
+    this.moveAccum = 0;
+    this.say('zazenStart', true);
+  }
+
+  tickZAZEN(dt, s, P) {
+    const z = this.zen;
+    const t = this.stateT;
+    const moved = this.moveAccum > 10 * s.body.scale;
+    if (moved || this.typeActive || this.zenBreak) {
+      this.zenBreak = false;
+      // flinching at Kon's antics means Kon wins
+      if (z.tempt && t < z.temptEnd + 1.2) { this.go('GOTCHA'); return; }
+      this.say('zazenBroken', true);
+      this.go('WATCH', { cautious: true, from: 'zazen' });
+      return;
+    }
+    // first, Kon checks whether you are *really* gone
+    if (!z.tempt && t >= z.temptAt) {
+      z.tempt = this.makeAct(this.temptBag.next());
+      z.temptEnd = t + 3.2;
+      this.say(z.tempt.def.caption, true);
+    }
+    if (z.tempt && t < z.temptEnd) {
+      this.runAct(z.tempt, dt, P);
+      return;
+    }
+    if (!z.tempt) {
+      // a quiet beat before the test: Kon peeks around
+      P.gaze = this.headAway(Math.sin(t * 1.3) * 260, -60);
+      P.headFollow = 0.4;
+      P.lidL = P.lidR = 0.3;
+      return;
+    }
+    // true meditation: the ensō paints itself
+    if (!z.settleAt) { z.settleAt = t; this.say('zazenSettle', true); }
+    const st = t - z.settleAt;
+    z.paint = Math.min(1, z.paint + dt / PAINT_SECONDS);
+    P.gaze = null;
+    P.headFollow = 0;
+    P.pitch = -0.1;
+    P.shutL = P.shutR = smoothstep(0, 0.8, st);
+    P.shutStyle = 'calm';
+    P.smile = 0.38;
+    P.armL = { x: -5, y: -76, space: 'body' };
+    P.armR = { x: 5, y: -76, space: 'body' };
+    P.breath = 0.42;
+    P.tailAmp = 0.03;
+    P.earPerk = -0.05;
+    P.blink = false;
+    P.browL = P.browR = 0.25;
+    if (z.paint > 0.55 && !z.said.half) { z.said.half = true; this.say('zazenHalf', true); }
+    if (z.paint > 0.85 && !z.said.almost) { z.said.almost = true; this.say('zazenAlmost', true); }
+    if (z.paint >= 1) this.go('SATORI');
+  }
+
+  enterSATORI() {
+    this.satoriCount += 1;
+    this.zenArmed = false;
+    this.emit('satori', this.satoriCount);
+    this.emit('sfx', 'bell');
+    this.say('satori', true);
+  }
+
+  tickSATORI(dt, s, P) {
+    const t = this.stateT;
+    P.gaze = null;
+    P.headFollow = 0;
+    P.shutL = P.shutR = 1;
+    P.shutStyle = 'calm';
+    P.smile = 0.62;
+    P.armL = { x: -5, y: -76, space: 'body' };
+    P.armR = { x: 5, y: -76, space: 'body' };
+    P.breath = 0.4;
+    P.blink = false;
+    P.pitch = -0.15;
+    P.earPerk = 0.2;
+    P.tailBase = -18;
+    P.tailAmp = 0.14;
+    P.tailSpeed = 0.4;
+    P.ahoge = Math.sin(t * 1.2) * 6;
+    P.float = t < 4.4 ? -28 + Math.sin(t * 1.6) * 3.5 : 0;
+    if (t > 3.5 && t < 4.4) {
+      // …wait. Is Kon floating?
+      P.shutR = 0.2;
+      P.lidR = 0.15;
+      P.gaze = this.headAway(0, 260);
+      P.eyeOpen = 1.18;
+      P.browR = 0.9;
+    }
+    if (t >= 4.4) {
+      P.shutL = P.shutR = 0;
+      P.eyeOpen = 1.26;
+      P.iris = 0.68;
+      P.shock = t < 5 ? 0.8 : 0;
+      P.mouthOpen = 0.4;
+      P.armL = { x: -62, y: -70, space: 'body' };
+      P.armR = { x: 62, y: -70, space: 'body' };
+      P.blush = 0.7;
+      P.sweat = 0.85;
+      if (t > 4.7 && !this.arg.landed) {
+        this.arg.landed = true;
+        this.impulse({ type: 'jolt', s: 0.45 });
+        this.say('satoriEnd', true);
+      }
+      if (this.arg.landed && t < 5.1) P.crouch = 0.4;
+    }
+    if (t > 6.6) this.go('IDLE', { afterSatori: true });
+  }
+
+  enterGOTCHA() {
+    this.say('gotcha', true);
+    this.impulse({ type: 'hop', s: 0.5 });
+    this.emit('sfx', 'boop');
+  }
+
+  tickGOTCHA(dt, s, P) {
+    const t = this.stateT;
+    const p = s.pointer;
+    P.gaze = p.present ? { x: p.x, y: p.y } : null;
+    P.headFollow = 0.5;
+    P.lidL = P.lidR = 0.4;
+    P.smile = 1;
+    P.mouthOpen = 0.22;
+    P.browTiltL = P.browTiltR = -0.25;
+    P.browL = P.browR = 0.3;
+    if (t < 1.6) P.armR = { x: 64, y: -24 + Math.sin(t * 14) * 6, space: 'head' };
+    P.tailAmp = 0.8;
+    P.tailSpeed = 2.4;
+    P.earPerk = 0.7;
+    P.blush = 0.25;
+    if (t > 2.3) this.go('WATCH', { cautious: true });
+  }
+
+  // ------------------------------------------------------------------ JUDGE (a raked circle)
+  enterJUDGE() {
+    this.say('judgeLook', true);
+    this.act = null;
+  }
+
+  tickJUDGE(dt, s, P) {
+    const t = this.stateT;
+    const a = this.arg;
+    P.gaze = { x: a.x, y: a.y };
+    P.headFollow = 0.9;
+    P.bodyFollow = 0.35;
+    if (t < 1.3) {
+      // hmm…
+      P.armL = { x: -10, y: 52 + Math.sin(t * 9) * 2, space: 'head' };
+      P.lidL = P.lidR = 0.34;
+      P.browTiltL = -0.4;
+      P.browTiltR = 0.15;
+      P.tilt = 8 * Math.sin(t * 2);
+      P.smile = 0;
+      return;
+    }
+    if (!a.shown) {
+      a.shown = true;
+      this.emit('ensoScore', a.score);
+      this.say(a.score >= 9 ? 'judgeGreat' : a.score >= 6 ? 'judgeGood' : 'judgeMeh', true);
+    }
+    P.sign = a.score;
+    P.armR = { x: 74, y: -14, space: 'head' };
+    if (t > 1.6) { P.gaze = null; P.headFollow = 0; }
+    if (a.score >= 9) {
+      P.sparkle = 1;
+      P.smile = 1;
+      P.mouthOpen = 0.35;
+      P.eyeOpen = 1.1;
+      const bow = bump(2.4, 3.5, t);
+      if (bow > 0) { P.pitch = 0.5 * bow; P.shutL = P.shutR = bow; P.shutStyle = 'happy'; }
+      if (t > 2.6 && !a.hearts) { a.hearts = true; this.impulse({ type: 'hearts', n: 3 }); }
+    } else if (a.score >= 6) {
+      P.smile = 0.6;
+      P.pitch = t < 2.2 ? Math.sin((t - 1.3) * 9) * 0.14 : 0;
+      if (t > 2.2 && t < 2.8) { P.shutL = P.shutR = 1; P.shutStyle = 'happy'; }
+    } else {
+      P.smile = -0.4;
+      P.lidL = P.lidR = 0.42;
+      P.sweat = 0.6;
+      P.tilt = -8;
+      P.browTiltL = P.browTiltR = 0.45;
+    }
+    if (t > 3.9) {
+      if (this.ptrActive) this.go('WATCH', { cautious: true });
+      else this.go('RELAXING', { quiet: true });
     }
   }
 

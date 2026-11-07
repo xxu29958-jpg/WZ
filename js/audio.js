@@ -110,6 +110,9 @@ export class Sound {
       case 'dizzy':
         this.tone(700, t, { d: 0.5, peak: 0.08, glide: 0.4 });
         break;
+      case 'bell': // a temple bowl: low partials, long decay
+        [196, 392.7, 588.3, 1017].forEach((f, i) => this.tone(f, t, { a: 0.01, d: 3.2 - i * 0.5, peak: [0.2, 0.09, 0.05, 0.025][i] }));
+        break;
       case 'chime':
         [1047, 1319, 1568, 2093].forEach((f, i) => this.tone(f, t + i * 0.09, { d: 0.8, peak: 0.08 }));
         break;

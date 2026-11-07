@@ -170,6 +170,47 @@ export function runDemo(zen, name, opts = {}) {
       document.getElementById('wish').requestSubmit();
       adv(1.6);
       break;
+    case 'tempt':
+      cursor.hidden = true;
+      until(() => brain.state === 'ZAZEN' && brain.zen.tempt && brain.stateT > brain.zen.temptAt + 1.0, 20);
+      break;
+    case 'zazen':
+      cursor.hidden = true;
+      until(() => brain.zen && brain.state === 'ZAZEN' && brain.zen.paint >= (opts.t ?? 0.6), 40);
+      break;
+    case 'satori':
+      cursor.hidden = true;
+      until(() => brain.state === 'SATORI', 45);
+      adv(opts.t ?? 2.2);
+      break;
+    case 'gotcha':
+      until(() => brain.state === 'ZAZEN' && brain.zen.tempt && brain.stateT > brain.zen.temptAt + 0.8, 20);
+      adv(0.3, (t) => move(H.x + 300 + t * 200, H.y - 120));
+      adv(0.5);
+      break;
+    case 'rake':
+    case 'judge': {
+      // rake a circle into the sand in front of Kon, then let Kon judge it
+      const c = scene.toScreen(1010, 952);
+      const r = 56 * scene.scale;
+      const pe = (type, x, y) => app.dispatchEvent(new PointerEvent(type, { clientX: x, clientY: y, pointerType: 'mouse', button: 0, buttons: 1, pointerId: 1, bubbles: true }));
+      pe('pointerdown', c.x + r, c.y);
+      const wob = name === 'rake' ? 0.12 : 0.03;
+      adv(1.6, (t) => {
+        const a = (t / 1.55) * Math.PI * 2;
+        const rr = r * (1 + wob * Math.sin(a * 3));
+        const x = c.x + Math.cos(a) * rr, y = c.y + Math.sin(a) * rr * 0.62;
+        pe('pointermove', x, y);
+        cx = x; cy = y;
+      });
+      pe('pointerup', cx, cy);
+      adv(opts.t ?? 2.0);
+      break;
+    }
+    case 'doodle':
+      cursor.hidden = true;
+      adv(opts.t ?? 4.4);
+      break;
     case 'night':
       cursor.hidden = true;
       scene.toggleNight(true);

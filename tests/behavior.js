@@ -4,6 +4,8 @@
 import { Brain } from '../js/brain.js';
 import { makeRng } from '../js/math.js';
 import { PLACES } from '../js/scene.js';
+import { analyzeStroke } from '../js/rake.js';
+import { TAU } from '../js/math.js';
 
 const HEAD = { x: 800, y: 612 };
 const BODY = {
@@ -115,7 +117,7 @@ const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
 test('starts idle and stays alive without input', (sim) => {
-  const poses = sim.still(8);
+  const poses = sim.still(5);
   const blinksOrActs = sim.history.length >= 0;
   const st = sim.brain.state;
   return { ok: st === 'IDLE' && blinksOrActs, info: `state=${st}, idle act seen=${!!sim.brain.idleAct || sim.brain.nextIdleAt < 8}` };
@@ -320,9 +322,10 @@ test('repeated focus/blur recovers cleanly', (sim) => {
   return { ok: sim.bad.length === 0 && ['IDLE', 'RELAXING', 'PRETENDING', 'WATCH'].includes(sim.brain.state), info: `end state=${sim.brain.state}; path ${sim.states.slice(-6).join(' → ')}` };
 });
 
-test('long quiet → DROWSY → SLEEPING; movement → WAKING', (sim) => {
-  sim.still(40);
-  const slept = sim.states.includes('DROWSY') && sim.brain.state === 'SLEEPING';
+test('long quiet → ZAZEN → SATORI → DROWSY → SLEEPING; movement → WAKING', (sim) => {
+  sim.still(75);
+  const path = ['ZAZEN', 'SATORI', 'DROWSY'].every((st) => sim.states.includes(st));
+  const slept = path && sim.brain.state === 'SLEEPING';
   const i0 = sim.states.length;
   sim.sweep(1.5);
   const woke = sim.sawSince(i0, 'WAKING');
@@ -383,6 +386,121 @@ test('no NaN or broken targets anywhere in a long random session', (sim) => {
     else sim.still(rng() * 3);
   }
   return { ok: sim.bad.length === 0, info: `${sim.bad.length} bad values; visited ${new Set(sim.states).size} states: ${[...new Set(sim.states)].join(', ')}` };
+});
+
+// ---------------------------------------------------------------- stillness
+const stillUntil = (sim, pred, max = 60) => {
+  for (let i = 0; i < max * 60 && !pred(); i++) sim.step();
+};
+
+test('perfect stillness → ZAZEN (with a temptation) → the ensō paints → SATORI', (sim) => {
+  sim.still(1);
+  let maxPaint = 0, tempted = null;
+  stillUntil(sim, () => sim.brain.state === 'SATORI', 45);
+  for (const h of sim.history) if (h.to === 'ZAZEN') tempted = true;
+  const z = sim.brain.zen;
+  maxPaint = z ? z.paint : 0;
+  const temptName = z && z.tempt ? z.tempt.name : null;
+  const ok = sim.states.join() === 'IDLE,ZAZEN,SATORI' && maxPaint >= 1 && sim.brain.satoriCount === 1 && !!temptName;
+  return { ok, info: `${sim.states.join(' → ')} temptation=${temptName} paint=${maxPaint.toFixed(2)} satori=${sim.brain.satoriCount} at ${sim.t.toFixed(1)}s` };
+});
+
+test('flinching at the temptation → GOTCHA (Kon wins)', (sim) => {
+  sim.still(1);
+  stillUntil(sim, () => sim.brain.state === 'ZAZEN' && sim.brain.zen.tempt && sim.brain.stateT > sim.brain.zen.temptAt + 0.8, 20);
+  const tempting = sim.brain.zen.tempt.name;
+  sim.sweep(0.4);
+  return { ok: sim.states.includes('GOTCHA'), info: `tempted with ${tempting}; ${sim.states.join(' → ')}` };
+});
+
+test('moving while the ensō paints breaks it; staying still again restarts it', (sim) => {
+  sim.still(1);
+  stillUntil(sim, () => sim.brain.zen && sim.brain.zen.paint > 0.3, 30);
+  const paint = sim.brain.zen.paint;
+  sim.sweep(0.5);
+  const broke = sim.brain.state === 'WATCH' && sim.brain.caption.key === 'zazenBroken';
+  sim.still(10);
+  const again = sim.brain.state === 'ZAZEN';
+  return { ok: broke && again, info: `broke at ${(paint * 100).toFixed(0)}% → ${broke ? 'WATCH/zazenBroken' : sim.brain.state}; 10 s later: ${sim.brain.state}` };
+});
+
+test('a tiny jitter (a few pixels) does not break meditation', (sim) => {
+  sim.moveTo(500, 300);
+  sim.still(1);
+  stillUntil(sim, () => sim.brain.zen && sim.brain.zen.paint > 0.2, 30);
+  sim.run(0.2, (t) => sim.moveTo(500 + (t > 0.1 ? 2 : 0), 300));
+  sim.still(0.5);
+  return { ok: sim.brain.state === 'ZAZEN', info: `state after a 2-unit nudge: ${sim.brain.state}` };
+});
+
+test('focusing the plaque breaks meditation', (sim) => {
+  sim.still(1);
+  stillUntil(sim, () => sim.brain.zen && sim.brain.zen.paint > 0.1, 30);
+  sim.focus();
+  sim.still(0.3);
+  return { ok: sim.brain.state === 'WATCH', info: `state=${sim.brain.state} attn=${sim.brain.attn.src}` };
+});
+
+test('after satori Kon rests instead of meditating again right away', (sim) => {
+  sim.still(1);
+  stillUntil(sim, () => sim.brain.state === 'SATORI', 45);
+  sim.still(12);
+  const zazens = sim.states.filter((x) => x === 'ZAZEN').length;
+  return { ok: zazens === 1 && sim.brain.state !== 'ZAZEN', info: sim.states.join(' → ') };
+});
+
+// ---------------------------------------------------------------- sand
+const circle = (n, r, wobble = 0, turns = 1, cx = 900, cy = 950) =>
+  Array.from({ length: n + 1 }, (_, i) => {
+    const a = (i / n) * TAU * turns;
+    const rr = r * (1 + wobble * Math.sin(a * 3 + 1)) * (turns > 1.5 ? 0.35 + 0.65 * (i / n) : 1);
+    return { x: cx + Math.cos(a) * rr, y: cy + Math.sin(a) * rr };
+  });
+
+test('stroke analysis: round circle scores high, wobbly lower, line nothing, spiral spiral', () => {
+  const round = analyzeStroke(circle(80, 90));
+  const wobbly = analyzeStroke(circle(80, 90, 0.18));
+  const line = analyzeStroke(Array.from({ length: 60 }, (_, i) => ({ x: 600 + i * 8, y: 900 + Math.sin(i / 5) * 6 })));
+  const spiral = analyzeStroke(circle(200, 120, 0, 3.2));
+  // a circle raked "on the ground" looks like a flattened oval — still a circle
+  const oval = analyzeStroke(circle(80, 90).map((p) => ({ x: p.x, y: 950 + (p.y - 950) * 0.55 })));
+  const ok = round?.shape === 'circle' && round.score >= 9 && wobbly?.shape === 'circle' && wobbly.score < round.score &&
+    oval?.shape === 'circle' && oval.score >= 9 && line === null && spiral?.shape === 'spiral';
+  return { ok, info: `round=${round?.score} oval=${oval?.score} wobbly=${wobbly?.score} line=${line} spiral=${spiral?.shape}` };
+});
+
+test('a raked circle → JUDGE holding up a score card; a spiral → DIZZY', (sim) => {
+  sim.still(1);
+  sim.events.push({ type: 'rakeStart', x: 900, y: 900 });
+  sim.still(0.1);
+  sim.events.push({ type: 'rakeEnd', shape: 'circle', score: 7, x: 900, y: 950, r: 80 });
+  let sign = null;
+  sim.run(2.2, null, (P) => { if (P.sign !== null) sign = P.sign; });
+  const judged = sim.states.includes('JUDGE') && sign === 7;
+  sim.still(3);
+  sim.events.push({ type: 'rakeEnd', shape: 'spiral', x: 900, y: 950 });
+  sim.still(0.2);
+  return { ok: judged && sim.brain.state === 'DIZZY' && sim.brain.caption.key === 'spiral', info: `card=${sign}; ${sim.states.join(' → ')}` };
+});
+
+test('raking breaks meditation', (sim) => {
+  sim.still(1);
+  stillUntil(sim, () => sim.brain.zen && sim.brain.zen.paint > 0.1, 30);
+  sim.events.push({ type: 'rakeStart', x: 900, y: 900 });
+  sim.still(0.1);
+  return { ok: sim.brain.state !== 'ZAZEN', info: `state=${sim.brain.state}` };
+});
+
+// ---------------------------------------------------------------- memory
+test('a returning visitor is greeted (and shown the doodle after a long absence)', (sim) => {
+  sim.events.push({ type: 'arrive', visits: 3, awayHours: 5, doodle: true });
+  const seen = [];
+  sim.run(6, null, () => {
+    const a = sim.brain.idleAct;
+    if (a && seen[seen.length - 1] !== a.name) seen.push(a.name);
+  });
+  const ok = seen[0] === 'greetWave' && seen.includes('doodleProud');
+  return { ok, info: `idle acts: ${seen.join(', ')}; caption key=${sim.brain.caption.key}` };
 });
 
 export function runAll() {

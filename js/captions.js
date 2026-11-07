@@ -43,4 +43,30 @@ export const CAPTIONS = {
   night: ['Night falls on the garden.', 'Kon pretends not to be afraid of the dark.'],
   day: ['Morning, already?', 'The sun is back. So is Kon.'],
   leave: ['Where did you go?', 'Kon is not waiting for you.'],
+
+  // the stillness test
+  zazenStart: ['…is anyone there?', 'It is very quiet. Suspiciously quiet.'],
+  temptWave: ['Hello? Anyone there?', 'Kon is waving. At nobody. Probably.'],
+  temptFaces: ['Kon is making faces. Stay strong.', 'Do not laugh. Do not move.'],
+  temptPeekaboo: ['Peekaboo? …Peekaboo?', 'Kon is testing you.'],
+  temptDance: ['Kon is doing a little dance. For no one.', 'A dance. To lure you out.'],
+  gotcha: ['Ha! Kon knew you were there.', 'Gotcha. Kon wins this round.'],
+  zazenSettle: ['Kon is truly meditating now. Don’t move.', 'Real zen. For once. Stay still.'],
+  zazenHalf: ['The brush is painting by itself…', 'Shh. Don’t breathe so loudly.'],
+  zazenAlmost: ['Almost…', 'Don’t. Move.'],
+  zazenBroken: ['So close.', 'The ink evaporates. Kon sighs.', 'Next time, perhaps.'],
+  satori: ['Satori.', 'Enlightenment.'],
+  satoriEnd: ['Satori lasted four seconds. A personal best.', 'Enlightenment: briefly achieved.'],
+
+  // judging the sand
+  judgeLook: ['Kon inspects your ensō.', 'Hmm.'],
+  judgeGreat: ['A true ensō. Kon bows.', 'Kon has nothing to teach you.'],
+  judgeGood: ['Not bad. Kon has seen better (Kon’s own).', 'Respectable.'],
+  judgeMeh: ['…Interesting.', 'Kon will pretend that is a circle.'],
+  spiral: ['Kon followed your spiral.', 'Round and round and round.'],
+
+  // the time of day
+  lateNight: ['It’s late. Kon is surprised you’re awake.', 'A night visitor. Kon lit the lantern for you.'],
+  dusk: ['Evening falls on the garden.', 'Dusk. The lantern is warming up.'],
+  dawn: ['An early visitor. Kon is barely awake.', 'Dawn. The sand is cold.'],
 };

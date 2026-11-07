@@ -7,6 +7,7 @@
 //   FoxRig        (pose → springs → SVG)        Scene (garden, layout, props)
 //
 // One requestAnimationFrame loop drives everything; DOM events only record data.
+// Around it: ZenFX (the live ensō), SandRake (raking) and a small memory of you.
 
 import { Brain } from './brain.js';
 import { FoxRig } from './rig.js';
@@ -16,6 +17,8 @@ import { Sound } from './audio.js';
 import { setClock } from './clock.js';
 import { makeRng } from './math.js';
 import { runDemo } from './demo.js';
+import { arrive, touch, saveMemory } from './memory.js';
+import { DOODLE_KINDS } from './rake.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');
@@ -145,6 +148,46 @@ function updateCaption() {
   }, 200);
 }
 
+// --- Kon remembers you (this browser only) ---
+// Test modes pass ?visits=, ?away= (hours) and ?hour= instead of reading storage.
+let memory;
+let awayHours;
+if (manual) {
+  memory = { visits: +params.get('visits') || 1, satori: +params.get('satori') || 0, bestEnso: 0, last: 0 };
+  awayHours = params.has('away') ? +params.get('away') : null;
+} else {
+  ({ memory, awayHours } = arrive());
+  const keepFresh = () => touch(memory);
+  setInterval(keepFresh, 30000);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) keepFresh(); });
+  window.addEventListener('pagehide', keepFresh);
+}
+brain.satoriCount = memory.satori || 0;
+if (memory.satori > 0) scene.zen.stampSeal(memory.satori, { quiet: true });
+let doodle = false;
+if (awayHours !== null && awayHours >= 1) {
+  // while you were away, Kon raked something into the sand
+  scene.rakeDoodle(DOODLE_KINDS[(memory.visits || 1) % DOODLE_KINDS.length]);
+  doodle = true;
+}
+input.push({ type: 'arrive', visits: memory.visits, awayHours, doodle });
+
+// the garden follows your local time (dawn, day, dusk, night)
+const hourNow = () => {
+  if (params.has('hour')) return +params.get('hour');
+  if (manual) return 12;
+  const d = new Date();
+  return d.getHours() + d.getMinutes() / 60;
+};
+let period = scene.setTimeOfDay(hourNow());
+if (period !== 'day') input.push({ type: 'daytime', period });
+if (!manual) {
+  setInterval(() => {
+    const next = scene.setTimeOfDay(hourNow());
+    if (next !== period) { period = next; input.push({ type: 'daytime', period }); }
+  }, 5 * 60 * 1000);
+}
+
 // --- debug overlay (?debug) ---
 const debugEl = $('debug');
 const showDebug = params.has('debug');
@@ -170,9 +213,14 @@ function tick(dt, ts) {
     if (em.type === 'sfx') sound.play(em.data);
     else if (em.type === 'dragonfly') scene.spawnDragonfly();
     else if (em.type === 'poke') scene.pokeFlower(1);
+    else if (em.type === 'satori') { memory.satori = em.data; if (!manual) saveMemory(memory); }
+    else if (em.type === 'ensoScore') { memory.bestEnso = Math.max(memory.bestEnso || 0, em.data); if (!manual) saveMemory(memory); }
   }
   rig.update(dt, pose);
   scene.update(dt);
+  const body = rig.measure();
+  scene.zen.update(dt, brain.zenInfo(), body.center);
+  scene.updateCursor(dt, input.pointer);
   updateCaption();
 
   if (showDebug && ts - debugAt > 100) {
@@ -184,7 +232,8 @@ function tick(dt, ts) {
       `attention ${d.attn}\n` +
       `curiosity ${d.cur.toFixed(2)}  ptr ${d.ptrI.toFixed(2)}  type ${d.typeI.toFixed(2)}\n` +
       `pointer   ${d.ptrActive ? 'moving' : 'still'}   typing ${d.typeActive ? 'yes' : 'no'}\n` +
-      `caught    ${d.caught}   idle ${d.idleFor.toFixed(1)}s   mode ${scene.mode}`;
+      `caught    ${d.caught}   idle ${d.idleFor.toFixed(1)}s   mode ${scene.mode}\n` +
+      `zen       ${brain.zen && d.state === 'ZAZEN' ? (brain.zen.paint * 100).toFixed(0) + '% painted' : '—'}   satori ${brain.satoriCount}   visit ${memory.visits}`;
   }
 }
 

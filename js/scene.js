@@ -4,6 +4,9 @@
 // dragonfly, fireflies). It reports interesting events and objects to the brain.
 
 import { Spring, clamp, lerp, smoothstep, TAU, DEG, makeRng, noise1, randRange } from './math.js';
+import { EnsoBrush } from './enso.js';
+import { ZenFX } from './zen.js';
+import { SandRake } from './rake.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const $ = (id) => document.getElementById(id);
@@ -68,6 +71,9 @@ export class Scene {
     this.buildSand();
     this.buildMaple();
     this.buildFireflies();
+    this.zen = new ZenFX({ scene: this, brush: this.brush, reducedMotion });
+    this.rake = new SandRake({ canvas: $('sand-canvas'), scene: this, emit: (ev) => this.emit(ev) });
+    this.cursorGlow = { x: 0, y: 0, trail: [], on: false, built: false };
     this.bindInteractions();
   }
 
@@ -129,6 +135,13 @@ export class Scene {
     $('maple').setAttribute('transform', `translate(${f2(this.maple.x)} ${f2(this.maple.y)}) scale(${ms})`);
     PLACES.maple = this.mapleToWorld(1220, 150);
     this.positionOverlays();
+    this.zen.layout();
+    // the rake canvas is reallocated only when the framing really changed
+    const key = `${W}x${H}@${f2(vb.x)},${f2(vb.y)},${f2(vb.w)}`;
+    if (key !== this.rakeKey) {
+      this.rakeKey = key;
+      this.rake.layout();
+    }
   }
 
   mapleToWorld(x, y) {
@@ -263,66 +276,8 @@ export class Scene {
 
   buildEnso() {
     const c = $('enso');
-    const size = c.width;
-    const g = c.getContext('2d');
-    const rng = makeRng(70);
-    const cx = size / 2, cy = size / 2;
-    const R = size * 0.4537; // 245 world units at 540 world wide
-    const start = 116 * DEG, sweep = 306 * DEG;
-    const steps = 560;
-    const brushW = size * 0.034;
-    const width = (t) => brushW * (0.7 + 0.45 * Math.sin(Math.min(1, t * 4) * Math.PI * 0.5)) * (1 - 0.62 * Math.pow(t, 1.4));
-    const at = (t) => {
-      const a = start + sweep * t;
-      const r = R * (1 + 0.011 * Math.sin(t * 8.5 + 1) + 0.005 * Math.sin(t * 21)) + t * size * 0.008;
-      return [cx + Math.cos(a) * r, cy + Math.sin(a) * r, a];
-    };
-
-    // soft ink bleed underneath
-    g.lineCap = 'round';
-    for (let i = 0; i < steps; i += 2) {
-      const t = i / steps;
-      const [x, y] = at(t);
-      const [x2, y2] = at((i + 2) / steps);
-      g.strokeStyle = `rgba(40, 30, 26, ${0.05 * (1 - t)})`;
-      g.lineWidth = width(t) * 2.6;
-      g.beginPath();
-      g.moveTo(x, y);
-      g.lineTo(x2, y2);
-      g.stroke();
-    }
-
-    // bristles
-    const B = 84;
-    for (let b = 0; b < B; b++) {
-      const o = (b / (B - 1)) * 2 - 1;
-      const ink = 0.6 + 0.4 * rng();
-      const dryStart = 0.2 + 0.55 * rng() * (1 - Math.abs(o) * 0.7);
-      g.lineWidth = (brushW * 2 / B) * 2.2;
-      g.strokeStyle = `rgba(34, 24, 20, ${(0.56 * ink).toFixed(3)})`;
-      g.beginPath();
-      let drawing = false;
-      for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        const [x, y, a] = at(t);
-        const w = width(t) * (1 + 0.1 * noise1(t * 14, b + 3));
-        const px = x + Math.cos(a) * o * w;
-        const py = y + Math.sin(a) * o * w;
-        const dryness = t > dryStart ? (t - dryStart) * 2.4 : 0;
-        const dry = noise1(t * 46 + b * 2.7, b) > 1 - dryness;
-        if (!dry) {
-          if (drawing) g.lineTo(px, py);
-          else { g.moveTo(px, py); drawing = true; }
-        } else drawing = false;
-      }
-      g.stroke();
-    }
-    // ink pooling where the brush landed
-    const [sx, sy, sa] = at(0.004);
-    g.fillStyle = 'rgba(30, 22, 18, .85)';
-    g.beginPath();
-    g.ellipse(sx, sy, brushW * 0.8, brushW * 1.05, sa, 0, TAU);
-    g.fill();
+    this.brush = new EnsoBrush(c.width);
+    this.brush.paintAll(c.getContext('2d'));
   }
 
   buildSand() {
@@ -441,6 +396,18 @@ export class Scene {
   // ------------------------------------------------------------------ interactions
   bindInteractions() {
     const stop = (e) => e.stopPropagation();
+    // raking: press on open sand and drag
+    this.app.addEventListener('pointerdown', (e) => {
+      if (this.rake.tryBegin(e, this.toWorld(e.clientX, e.clientY))) {
+        try { this.app.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+      }
+    });
+    this.app.addEventListener('pointermove', (e) => {
+      if (this.rake.active) this.rake.extend(e, this.toWorld(e.clientX, e.clientY));
+    });
+    const endRake = (e) => { if (this.rake.active) this.rake.end(e); };
+    this.app.addEventListener('pointerup', endRake);
+    this.app.addEventListener('pointercancel', endRake);
     $('lantern').addEventListener('click', () => this.toggleNight());
     $('shishi').addEventListener('click', () => this.tipShishi(true));
     $('maple').addEventListener('click', (e) => {
@@ -571,10 +538,61 @@ export class Scene {
     this.emit({ type: 'sfx', name: 'chime' });
   }
 
+  /** Kon's sand doodle "while you were away" — placed in open sand in front of the cushion. */
+  rakeDoodle(kind) {
+    const at = this.mode === 'wide' ? { x: 800, y: 968, s: 1 } : { x: 800, y: 882, s: 0.75 };
+    this.rake.doodle(kind, at.x, at.y, at.s);
+    PLACES.doodle = { x: at.x, y: at.y };
+  }
+
+  /** Follow the visitor's local time: dawn, day, dusk or night. */
+  setTimeOfDay(hour) {
+    const night = hour < 5.5 || hour >= 19;
+    const dusk = hour >= 17 && hour < 19;
+    const dawn = hour >= 5.5 && hour < 7.5;
+    document.body.classList.toggle('is-dusk', dusk);
+    document.body.classList.toggle('is-dawn', dawn);
+    if (night && !this.night) {
+      this.night = true;
+      document.body.classList.add('is-night');
+      document.querySelector('meta[name="theme-color"]').setAttribute('content', '#2a2f4a');
+    }
+    return night ? 'night' : dusk ? 'dusk' : dawn ? 'dawn' : 'day';
+  }
+
+  /** At night the cursor becomes a firefly, trailing a little light. */
+  updateCursor(dt, pointer) {
+    const cg = this.cursorGlow;
+    if (!this.night || !pointer.present || pointer.isTouch) {
+      if (cg.on) { $('cursor-firefly').style.display = 'none'; cg.on = false; }
+      return;
+    }
+    if (!cg.built) {
+      const host = $('cursor-firefly');
+      for (let i = 0; i < 6; i++) {
+        const el = make('circle', { r: f2(10 - i * 1.3), fill: 'url(#firefly)' }, host);
+        cg.trail.push({ el, x: pointer.x, y: pointer.y });
+      }
+      cg.built = true;
+    }
+    if (!cg.on) { $('cursor-firefly').style.display = ''; cg.on = true; }
+    let tx = pointer.x, ty = pointer.y;
+    cg.trail.forEach((d, i) => {
+      const k = 1 - Math.exp(-dt * (28 - i * 3.6));
+      d.x += (tx - d.x) * k;
+      d.y += (ty - d.y) * k;
+      d.el.setAttribute('cx', f2(d.x));
+      d.el.setAttribute('cy', f2(d.y));
+      d.el.style.opacity = f2((0.95 - i * 0.13) * (0.8 + 0.2 * Math.sin(this.t * 7 + i)));
+      tx = d.x; ty = d.y;
+    });
+  }
+
   // ------------------------------------------------------------------ per frame
   update(dt) {
     this.t += dt;
     const t = this.t;
+    this.rake.update(dt);
     this.updateShishi(dt);
     this.updateMaple(dt);
     this.updateLeaves(dt);

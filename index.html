@@ -65,8 +65,13 @@
     </g>
   </svg>
 
-  <!-- the brushed ensō, painted procedurally onto a canvas at load -->
+  <!-- grooves you rake into the sand (drawn as you drag; they slowly smooth away) -->
+  <canvas id="sand-canvas" aria-hidden="true"></canvas>
+
+  <!-- the brushed ensō, painted procedurally onto a canvas at load… -->
   <canvas id="enso" class="layer-canvas" width="1080" height="1080" aria-hidden="true"></canvas>
+  <!-- …and the one that paints itself, stroke by stroke, while you stay still -->
+  <canvas id="enso-live" class="layer-canvas" width="1080" height="1080" aria-hidden="true"></canvas>
 
   <!-- ================================================================
        THE GARDEN — a world of 1600 × 1000 design units, extended beyond
@@ -179,6 +184,9 @@
           </g>
         </g>
       </g>
+
+      <!-- the glow of a fox that has (briefly) reached enlightenment -->
+      <g id="aura" aria-hidden="true"></g>
 
       <!-- KON — the novice fox monk. Every part is a named group the rig drives. -->
       <g id="kon" transform="translate(800 788) scale(1.15)">
@@ -335,6 +343,14 @@
             </g>
           </g>
 
+          <!-- the judge's score card, held up in the right paw -->
+          <g id="kon-sign" opacity="0">
+            <path class="sign-stick" d="M 0,6 L 0,-26"/>
+            <rect x="-23" y="-66" width="46" height="42" rx="6" class="c-sign ink"/>
+            <path d="M -15,-58 h 30" class="sign-grain"/>
+            <text id="kon-sign-text" x="0" y="-33" class="sign-text" text-anchor="middle">7</text>
+          </g>
+
           <g id="kon-arm-l" class="arm"><path class="arm-ol"/><path class="arm-fur"/><path class="arm-sock"/><ellipse class="paw" rx="10.5" ry="9"/></g>
           <g id="kon-arm-r" class="arm"><path class="arm-ol"/><path class="arm-fur"/><path class="arm-sock"/><ellipse class="paw" rx="10.5" ry="9"/></g>
         </g>
@@ -379,10 +395,21 @@
       </g>
 
       <g id="fx-world"></g>
+
+      <!-- the spirit brush that paints the ensō while Kon meditates -->
+      <g id="spirit-brush" opacity="0" aria-hidden="true">
+        <g id="spirit-brush-tilt">
+          <rect x="-5" y="-112" width="10" height="86" rx="4" class="brush-handle ink-thin"/>
+          <path d="M -5,-96 h 10 M -5,-58 h 10" class="brush-node"/>
+          <rect x="-6.5" y="-30" width="13" height="9" rx="2" class="brush-ferrule ink-thin"/>
+          <path d="M -6,-21 C -8,-7 -3,3 0,11 C 3,3 8,-7 6,-21 Z" class="brush-tip ink-thin"/>
+        </g>
+      </g>
     </g>
   </svg>
 
   <!-- night: a multiply veil, then the lit things above it -->
+  <div id="tint" aria-hidden="true"></div>
   <div id="night-veil" aria-hidden="true"></div>
   <svg id="glow" viewBox="0 0 1600 1000" aria-hidden="true">
     <defs>
@@ -403,6 +430,7 @@
       <rect id="lantern-window-lit" x="313" y="563" width="34" height="42" rx="3" fill="url(#window-glow)"/>
       <path d="M 330,563 V 605 M 313,584 H 347" class="lantern-mullion lit"/>
       <g id="fireflies"></g>
+      <g id="cursor-firefly"></g>
     </g>
   </svg>
 
@@ -417,6 +445,9 @@
 
   <!-- what Kon is (supposedly) doing -->
   <p id="caption" class="caption" aria-hidden="true"><span></span></p>
+
+  <!-- stamped when Kon reaches satori -->
+  <div id="satori-seal" class="satori-seal" hidden aria-hidden="true"><span class="satori-kanji">悟</span><span class="satori-count"></span></div>
 
   <!-- the wish plaque (ema) -->
   <form id="wish" class="ema" autocomplete="off" novalidate>
@@ -445,10 +476,11 @@
       <li>Move slowly. Keep going. Then <em>stop</em>.</li>
       <li>Sneak up on Kon.</li>
       <li>Write a wish on the plaque, then pause.</li>
-      <li>Boop the nose. Pet the head.</li>
-      <li>Circle Kon, quickly, a few times.</li>
+      <li>Be <em>perfectly still</em>. Kon will try to make you flinch.</li>
+      <li>Drag across the sand to rake it. Draw a circle for Kon to judge.</li>
+      <li>Boop the nose. Pet the head. Circle Kon, quickly.</li>
       <li>Light the lantern. Shake the maple. Tap the bamboo.</li>
-      <li>Leave Kon alone for a while.</li>
+      <li>Come back tomorrow. Kon notices.</li>
     </ul>
     <p class="hints-foot">Nothing you type is read or stored. Kon only sees that you are typing.</p>
   </aside>
