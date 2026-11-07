@@ -14,6 +14,7 @@ from observe import FRAME_PROBE, frame_stats  # noqa: E402
 VARIANTS = {
     "everything": "",
     "no grain overlay": "document.querySelector('.grain').style.display='none';",
+    "grain, normal blend": "document.querySelector('.grain').style.mixBlendMode='normal';",
     "no blend veils": "for (const id of ['night-veil','tint']) document.getElementById(id).style.display='none';",
     "no ensō canvases": "for (const id of ['enso','enso-live']) document.getElementById(id).style.display='none';",
     "no sand canvas": "document.getElementById('sand-canvas').style.display='none';",

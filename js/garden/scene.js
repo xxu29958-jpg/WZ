@@ -57,7 +57,6 @@ export class Scene {
     this.shishi = { angle: 18, av: 0, fill: 0, phase: 'filling', fillTime: 12, dripT: 0, pourT: 0 };
     this.shishiTube = $('shishi-tube');
 
-    this.buildPaper();
     this.buildSky();
     this.buildEnso();
     this.buildSand();
@@ -75,6 +74,9 @@ export class Scene {
     // camera: pans to follow Kon; far layers drift less (parallax)
     this.camX = 0;
     this.camV = 0;
+    this.worldLayers = $('world-layers');
+    this.farLayers = { hills: $('layer-hills'), trees: $('layer-trees'), wall: $('layer-wall') };
+    this.layers = [this.back, this.svg, this.glow, ...Object.values(this.farLayers)];
     this.appliedCamX = null;
     this.captionW = 300;
     this.bindInteractions();
@@ -118,7 +120,8 @@ export class Scene {
     }
     this.baseVb = vb;
     this.scale = W / vb.w;
-    this.paintGrain(W, H);
+    this.camMargin = this.mode === 'wide' ? 90 : 490;
+    this.viewDirty = true;
     this.W = W;
     this.H = H;
     this.rake.layout();
@@ -137,31 +140,62 @@ export class Scene {
     const vb = { ...this.baseVb, x: this.baseVb.x + this.camX };
     this.vb = vb;
     this.appliedCamX = this.camX;
-    const vbs = `${f2(vb.x)} ${f2(vb.y)} ${f2(vb.w)} ${f2(vb.h)}`;
-    for (const el of [this.back, this.svg, this.glow]) {
-      el.setAttribute('viewBox', vbs);
-      el.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+    const S = this.scale;
+    if (this.viewDirty) {
+      // every layer is wider than the screen by the camera's range on each side
+      // (a whole number of pixels, so the art stays on the same pixel grid as before)
+      const b = this.baseVb, mpx = Math.round(this.camMargin * S), M = mpx / S;
+      const vbs = `${(b.x - M).toFixed(4)} ${f2(b.y)} ${(b.w + 2 * M).toFixed(4)} ${f2(b.h)}`;
+      for (const el of this.layers) {
+        el.setAttribute('viewBox', vbs);
+        el.setAttribute('preserveAspectRatio', 'xMidYMid slice');
+        el.style.left = `${-mpx}px`;
+        el.style.width = `${this.W + 2 * mpx}px`;
+      }
+      // canvases inside the moving world layer sit at their base (camera 0) positions
+      const e = this.baseToScreen(530, 330);
+      const enso = $('enso');
+      enso.style.transform = `translate(${f2(e.x)}px, ${f2(e.y)}px) scale(${(540 * S / enso.width).toFixed(4)})`;
+      this.zen.layout();
+      this.rake.place();
+      this.placeMaple();
+      this.viewDirty = false;
     }
-    // parallax: hills barely move, trees a little, the wall almost with the ground
-    const c = this.camX;
-    $('sky').setAttribute('transform', `translate(${f2(c * 0.78)} 0)`);
-    $('trees').setAttribute('transform', `translate(${f2(c * 0.5)} 0)`);
-    $('wall').setAttribute('transform', `translate(${f2(c * 0.15)} 0)`);
-    $('moon').setAttribute('transform', `translate(${f2(c * 0.9)} 0)`);
-    // the ensō canvas sits between the two SVG layers at world (530, 330, 540 × 540)
-    const e = this.toScreen(530, 330);
-    const enso = $('enso');
-    enso.style.transform = `translate(${f2(e.x)}px, ${f2(e.y)}px) scale(${(540 * this.scale / enso.width).toFixed(4)})`;
-    // the maple always leans in from the top-right corner of whatever is visible
+    // the camera: composited transforms only — far layers drift less (parallax)
+    const px = -this.camX * S;
+    const slide = (k) => `translate3d(${f2(px * k)}px, 0, 0)`;
+    this.worldLayers.style.transform = slide(1);
+    this.glow.style.transform = slide(1);
+    this.farLayers.hills.style.transform = slide(0.22);
+    this.farLayers.trees.style.transform = slide(0.5);
+    this.farLayers.wall.style.transform = slide(0.85);
+    $('moon').setAttribute('transform', `translate(${f2(this.camX * 0.9)} 0)`);
+    PLACES.maple = this.mapleToWorld(1220, 150);
+    this.positionOverlays();
+    this.zen.placeSeal();
+  }
+
+  /**
+   * The maple leans in from the top-right corner of the screen, on its own layer
+   * (whose user space is the base view: the camera never moves it).
+   */
+  placeMaple() {
+    const b = this.baseVb;
     const ms = this.mode === 'wide' ? 1 : 0.7;
     // clear the branding on tall screens; with the keyboard up, lift it out of view
     const drop = this.mode === 'wide' ? 0 : this.mode === 'tall' ? 70 : -260;
-    this.maple = { s: ms, x: vb.x + vb.w - ms * 1520, y: vb.y + ms * 20 + drop };
+    this.maple = { s: ms, x: b.x + b.w - ms * 1520, y: b.y + ms * 20 + drop };
+    const layer = $('layer-maple');
+    layer.setAttribute('viewBox', `${f2(b.x)} ${f2(b.y)} ${f2(b.w)} ${f2(b.h)}`);
     $('maple').setAttribute('transform', `translate(${f2(this.maple.x)} ${f2(this.maple.y)}) scale(${ms})`);
-    PLACES.maple = this.mapleToWorld(1220, 150);
-    this.positionOverlays();
-    this.zen.layout();
-    this.rake.place();
+    // the branch sways around where it enters the screen
+    const pivot = this.baseToScreen(this.maple.x + ms * 1760, this.maple.y - ms * 60);
+    layer.style.transformOrigin = `${f2(pivot.x)}px ${f2(pivot.y)}px`;
+  }
+
+  /** World → screen for things inside the moving world layer (as if the camera were at 0). */
+  baseToScreen(x, y) {
+    return { x: (x - this.baseVb.x) * this.scale, y: (y - this.baseVb.y) * this.scale };
   }
 
   /** Re-sort Kon among the scenery and remember where Kon is (camera, caption). */
@@ -194,9 +228,10 @@ export class Scene {
     cap.style.top = `${f2(y)}px`;
   }
 
+  /** A point on the maple (its own drawing units) → where it is in the world right now. */
   mapleToWorld(x, y) {
     const m = this.maple || { s: 1, x: 0, y: 0 };
-    return { x: m.x + m.s * x, y: m.y + m.s * y };
+    return { x: m.x + m.s * x + this.camX, y: m.y + m.s * y };
   }
 
   toScreen(x, y) {

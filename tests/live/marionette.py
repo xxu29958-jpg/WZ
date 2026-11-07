@@ -25,6 +25,11 @@ PREFS = {
     "datareporting.policy.dataSubmissionEnabled": False,
     "toolkit.telemetry.reportingpolicy.firstRun": False,
     "browser.startup.homepage_override.mstone": "ignore",
+    # anti-fingerprinting protections force UTC and coarsen timers (frame times came
+    # out in exact 16.7 ms steps); tests need the real clock and real timings
+    "privacy.resistFingerprinting": False,
+    "privacy.fingerprintingProtection": False,
+    "privacy.reduceTimerPrecision": False,
 }
 
 

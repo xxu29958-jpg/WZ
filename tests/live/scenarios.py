@@ -27,6 +27,9 @@ class Page:
         self.path = url[len(self.origin):] or "/"
 
     def load(self, extra="", wait=1.2):
+        # pin the time of day (the garden follows the local clock), unless a scenario asks otherwise
+        if "hour=" not in extra:
+            extra = (extra + "&" if extra else "") + "hour=12"
         sep = "&" if "?" in self.path else "?"
         self.ff.open_sized(self.origin, self.path + (sep + extra if extra else ""), self.w, self.h)
         self.ff.js(FRAME_PROBE)

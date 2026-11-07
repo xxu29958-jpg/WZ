@@ -16,8 +16,11 @@ from marionette import Firefox  # noqa: E402
 
 FRAME_PROBE = """
 window.__frames = [];
-let last = performance.now();
-(function f(t) { window.__frames.push(t - last); last = t; requestAnimationFrame(f); })(last);
+if (!window.__frameProbe) {
+  window.__frameProbe = true;
+  let last = performance.now();
+  (function f(t) { window.__frames.push(t - last); last = t; requestAnimationFrame(f); })(last);
+}
 window.__errors = window.__errors || [];
 window.addEventListener('error', (e) => window.__errors.push(String(e.message)));
 window.addEventListener('unhandledrejection', (e) => window.__errors.push(String(e.reason)));
