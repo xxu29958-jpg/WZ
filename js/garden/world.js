@@ -181,6 +181,7 @@ export function bodyAt(x, y, h = 0) {
   const fy = footY(y, h);
   return {
     head: { x, y: fy - 150 * s },
+    crown: { x: x - 16 * s, y: fy - 204 * s },
     restHead: { x, y: fy - 150 * s },
     nose: { x, y: fy - 120 * s },
     mouth: { x, y: fy - 108 * s },

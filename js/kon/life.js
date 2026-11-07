@@ -1,6 +1,7 @@
 // Life — what Kon does when nobody is interacting: rest at home, pick places
 // to visit (by novelty, whim and distance), walk there and do something,
-// chase fallen leaves, and head home when the garden goes quiet.
+// chase fallen leaves (and sparrows: see visitors.js), and head home when the
+// garden goes quiet.
 // Mixed into Brain (see brain.js); `this` is the brain.
 
 import { randRange } from '../math.js';
@@ -149,6 +150,7 @@ export class Life {
     if (!self) { this.restIdle(dt, s, P); return; }
     if (!L.act) {
       this.restIdle(dt, s, P);
+      if (!this.greet && this.noticeBird(s)) return;
       const fresh = this.reachableLeaf(s);
       if (fresh && fresh.byVisitor && !this.greet) { L.leafSeen[fresh.id] = true; L.act = { id: 'leaf', phase: 'go', leafId: fresh.id, t: 0 }; this.idleAct = null; return; }
       if (this.now > L.restUntil && !this.idleAct && !this.greet) {
@@ -162,7 +164,9 @@ export class Life {
       }
       return;
     }
-    // a leaf just landed: that beats any casual plan (but not going home to meditate)
+    if (L.act.id === 'bird') { this.tickBird(dt, s, P); return; }
+    // a bird or a leaf beats any casual plan (but not going home to meditate or sleep)
+    if (!L.act.why && L.act.id !== 'leaf' && this.noticeBird(s)) return;
     if (!L.act.zen && L.act.id !== 'leaf') {
       const leaf = this.reachableLeaf(s);
       if (leaf) {

@@ -77,6 +77,27 @@ class Page:
     def errors(self):
         return self.js("return window.__errors || []")
 
+    def layout_problems(self):
+        """Overlaps between the speech bubble, caption, branding, buttons and plaque,
+        and text spilling off-screen — measured from the real on-screen boxes."""
+        return self.js("""
+          const box = (q) => { const e = document.querySelector(q); if (!e) return null;
+            const st = getComputedStyle(e); if (st.display === 'none' || +st.opacity < 0.5) return null;
+            const r = e.getBoundingClientRect(); return r.width && r.height ? r : null; };
+          const B = { bubble: box('#kon-says.show'), caption: box('#caption span'), brand: box('.brand'),
+                      buttons: box('.corner'), plaque: box('#wish .ema-board') };
+          const hit = (a, b) => a && b && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+          const out = [];
+          for (const o of ['caption', 'brand', 'buttons', 'plaque']) if (hit(B.bubble, B[o])) out.push('bubble×' + o);
+          for (const o of ['plaque', 'brand', 'buttons']) if (hit(B.caption, B[o])) out.push('caption×' + o);
+          for (const k of ['bubble', 'caption']) { const r = B[k]; if (r && (r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight)) out.push(k + ' off-screen'); }
+          return out;""")
+
+    def check_layout(self, moment, problems):
+        bad = self.layout_problems()
+        if bad:
+            problems.append(f"{moment}: {', '.join(bad)}")
+
 
 def sweep_points(cx, cy, ax, ay, n=40, turns=1.5):
     return [(cx + ax * math.sin(i / n * turns * 2 * math.pi), cy + ay * math.sin(i / n * turns * 4 * math.pi)) for i in range(n + 1)]
@@ -89,13 +110,16 @@ def watch_stop_resume(p):
     p.ff.pointer_path(sweep_points(hx, hy - 260, 380, 30), duration_ms=3600)
     peeking = p.js("return window.__zen.brain.state === 'WATCH' && window.__zen.brain.cur > 0.5")
     p.shot("watch-peek")
+    probs = []
+    p.check_layout("peek", probs)
     ok_pretend = p.wait_for("window.__zen.brain.state === 'PRETENDING'", 3)
     time.sleep(0.8)
     p.shot("watch-pretend")
     time.sleep(0.8)
+    p.check_layout("pretend", probs)
     p.ff.pointer_path(sweep_points(hx, hy - 260, 300, 20, turns=1), duration_ms=2400)
     resumed = "RESUMING" in p.history()
-    return peeking and ok_pretend and resumed, f"peeking={peeking} pretend={ok_pretend} resumed={resumed}; {' → '.join(p.history())}"
+    return peeking and ok_pretend and resumed and not probs, f"peeking={peeking} pretend={ok_pretend} resumed={resumed} layout={probs or 'ok'}; {' → '.join(p.history())}"
 
 
 def rush_startle(p):
@@ -106,14 +130,21 @@ def rush_startle(p):
     ok = p.wait_for("window.__zen.brain.history.some(h => h.to === 'STARTLED')", 2)
     time.sleep(0.15)
     p.shot("rush-startle")
-    return ok, " → ".join(p.history())
+    said = p.js("return window.__zen.brain.voice.key")
+    probs = []
+    p.check_layout("startle", probs)
+    return ok and said == "startled" and not probs, f"Kon said: {said}; layout={probs or 'ok'}; " + " → ".join(p.history())
 
 
 def typing_walks_over(p):
     p.load("motion=full")
     box = p.js("const r = document.getElementById('wish-input').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2];")
     p.ff.pointer_path([(box[0], box[1])], 0, press=True)
-    p.ff.type_keys("a quiet morning", delay_ms=140)
+    p.ff.type_keys("a quiet", delay_ms=140)
+    probs = []
+    p.check_layout("typing (walking over)", probs)
+    said = p.js("return window.__zen.brain.voice.key")
+    p.ff.type_keys(" morning", delay_ms=140)
     p.ff.type_keys(" with tea", delay_ms=160)
     time.sleep(0.2)
     k = p.kon()
@@ -123,7 +154,8 @@ def typing_walks_over(p):
     time.sleep(0.6)
     p.shot("typing-pretend")
     value_untouched = p.js("return document.getElementById('wish-input').value") == "a quiet morning with tea"
-    return near < 40 and ok_pretend and value_untouched, f"distance to reading spot {near:.0f}; pretended={ok_pretend}; {' → '.join(p.history())}"
+    p.check_layout("typing (pretending)", probs)
+    return near < 40 and ok_pretend and value_untouched and not probs, f"distance to reading spot {near:.0f}; pretended={ok_pretend}; said={said}; layout={probs or 'ok'}; {' → '.join(p.history())}"
 
 
 def rake_circle_judged(p):
@@ -151,6 +183,11 @@ def stalk_and_pounce(p):
     ok_air = p.wait_for("window.__zen.brain.state === 'POUNCE' && window.__zen.brain.arg.phase === 'air' && window.__zen.mover.state().jumpU > 0.4", 4)
     p.shot("pounce-air")
     ok_after = p.wait_for("window.__zen.brain.state === 'PRETENDING'", 5)
+    time.sleep(0.3)
+    p.shot("pounce-miss")
+    probs = []
+    p.check_layout("after the pounce", probs)
+    ok_after = ok_after and not probs
     return ok_air and ok_after, f"stalkT={stalking:.2f} airborne={ok_air} then pretended={ok_after}; {' → '.join(p.history())}"
 
 
@@ -196,8 +233,111 @@ def mobile_touch(p):
     judged = p.wait_for("window.__zen.brain.history.some(h => h.to === 'JUDGE')", 2)
     time.sleep(3.5)
     p.shot("mobile-judge")
+    probs = []
+    p.check_layout("phone, judging", probs)
     overflow = p.js("return document.documentElement.scrollWidth > innerWidth || document.documentElement.scrollHeight > innerHeight")
-    return mode == "tall" and patted and judged and not overflow, f"mode={mode} patted={patted} judged={judged} overflow={overflow}"
+    return mode == "tall" and patted and judged and not overflow and not probs, f"mode={mode} patted={patted} judged={judged} overflow={overflow} layout={probs or 'ok'}"
+
+
+def sparrow_hunt_and_scare(p):
+    p.load("motion=full")
+    time.sleep(2)
+    # 1) a sparrow on the sand: Kon creeps up and pounces; the bird gets away
+    # (it may spot Kon creeping and leave early — the unit tests cover that; here it stays put)
+    p.js("const z = window.__zen; z.brain.zenArmed = false; z.birds.sneakNotice = 0; z.birds.visit('sand', {x: 1125, y: 958});")
+    p.ff.pointer_path([(20, 20)], 0)   # cursor parked in a corner, out of the way
+    crept = p.wait_for("(() => { const a = window.__zen.brain.life.act; return a && a.id === 'bird' && window.__zen.mover.state().gait === 'sneak' && window.__zen.mover.state().moving; })()", 10)
+    time.sleep(0.8)
+    p.shot("sparrow-creep")
+    probs = []
+    p.check_layout("creeping up on the sparrow", probs)
+    pounced = p.wait_for("window.__zen.brain.state === 'POUNCE'", 12)
+    escaped = p.wait_for("window.__zen.birds.state === 'flyAway' || window.__zen.birds.state === 'away'", 4)
+    why = p.js("return window.__zen.birds.lastFlee")
+    time.sleep(1.2)
+    p.shot("sparrow-after")
+    p.check_layout("after the pounce", probs)
+    p.wait_for("window.__zen.birds.state === 'away'", 4)
+    # 2) a sparrow on the lantern: a quick swipe of the real mouse sends it off
+    p.wait_for("window.__zen.brain.state === 'IDLE'", 6)
+    p.js("window.__zen.birds.visit('lantern')")
+    landed = p.wait_for("window.__zen.birds.state === 'perched'", 6)
+    bx, by = p.screen(351, 500)
+    pts = [(bx + 260 - i * 13, by + 60 - i * 3) for i in range(21)]
+    p.ff.pointer_path(pts, duration_ms=250)
+    scared = p.wait_for("window.__zen.birds.state !== 'perched'", 1.5)
+    ok = crept and pounced and escaped and landed and scared and not probs
+    return ok, f"crept={crept} pounced={pounced} bird escaped={escaped} ({why}); lantern landing={landed} swipe scared it={scared}; layout={probs or 'ok'}"
+
+
+def sparrow_touch(p):
+    p.load("motion=full", wait=1.5)
+    vb = p.js("const v = window.__zen.scene.vb; return [v.x, v.w]")
+    spot = {"x": vb[0] + vb[1] * 0.72, "y": 955}
+    p.js("const z = window.__zen; z.brain.zenArmed = false; z.birds.visit('sand', arguments[0]);", spot)
+    landed = p.wait_for("window.__zen.birds.state === 'perched'", 6, every=0.05)
+    sx, sy = p.screen(spot["x"], spot["y"] - 12)
+    on_screen = 0 <= sx <= p.w and 0 <= sy <= p.h
+    p.shot("sparrow-phone")
+    p.ff.tap(sx, sy)
+    scared = p.wait_for("window.__zen.birds.state !== 'perched'", 1.2)
+    return landed and on_screen and scared, f"landed={landed} on screen at ({sx:.0f},{sy:.0f})={on_screen} tap scared it={scared}"
+
+
+# phones (portrait and landscape), tablets, laptops, big and ultra-wide screens
+SIZES = ["320x568", "375x667", "390x844", "414x896", "844x390", "768x1024", "1024x768", "1280x720", "1440x900", "1920x1080", "2560x1080"]
+
+
+def layout_at_sizes(p):
+    """Load the garden at many viewport sizes and check what's on screen, then make
+    Kon talk and check the bubble too. On phone sizes, also pat Kon with a tap."""
+    rows, bad = [], []
+    for size in SIZES:
+        w, h = map(int, size.split("x"))
+        p.w, p.h = w, h
+        p.load("motion=full", wait=1.4)
+        m = p.js("""
+          const z = window.__zen, R = (q) => { const e = document.querySelector(q); return e ? e.getBoundingClientRect() : null; };
+          const kon = document.querySelector('#kon-upper').getBoundingClientRect(), head = R('#kon-head');
+          const plaque = R('#wish .ema-board'), brand = R('.brand'), corner = R('.corner');
+          const hit = (a, b) => a && b && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+          const inside = (r, pad = 0) => r && r.left >= -pad && r.top >= -pad && r.right <= innerWidth + pad && r.bottom <= innerHeight + pad;
+          const btns = [...document.querySelectorAll('.corner button')].map((b) => b.getBoundingClientRect());
+          return { mode: z.scene.mode, vw: [innerWidth, innerHeight],
+            overflow: document.documentElement.scrollWidth > innerWidth || document.documentElement.scrollHeight > innerHeight,
+            konOn: inside(kon, 4), headOn: inside(head), plaqueOn: inside(plaque), plaqueOverHead: hit(plaque, head),
+            brandOverButtons: hit(brand, corner), brandOverHead: hit(brand, head), buttonsOverHead: hit(corner, head),
+            plaqueOverBrand: hit(plaque, brand), smallestButton: Math.min(...btns.map((b) => Math.min(b.width, b.height))),
+            konH: Math.round(kon.height) };""")
+        probs = []
+        p.check_layout("resting", probs)
+        # the help panel fits on screen (or scrolls)
+        hints = p.js("""document.getElementById('btn-hints').click(); const h = document.getElementById('hints'), r = h.getBoundingClientRect();
+          const ok = r.right <= innerWidth && r.left >= 0 && r.bottom <= innerHeight + 1 && (h.scrollHeight <= h.clientHeight + 1 || getComputedStyle(h).overflowY === 'auto');
+          document.getElementById('btn-hints').click(); return ok;""")
+        if not hints:
+            probs.append("help panel off-screen")
+        # say something: the bubble must find a free spot
+        p.js("window.__zen.brain.speak('typingWalk')")
+        time.sleep(0.5)
+        p.check_layout("speaking", probs)
+        tap = None
+        if w < 900:
+            hx, hy = p.head()
+            p.ff.tap(hx, hy - 18)
+            tap = p.wait_for("window.__zen.brain.state === 'PETTED'", 1.5)
+        flags = [k for k in ("overflow", "plaqueOverHead", "brandOverButtons", "brandOverHead", "buttonsOverHead", "plaqueOverBrand") if m[k]]
+        flags += [k for k in ("konOn", "headOn", "plaqueOn") if not m[k]]
+        if m["smallestButton"] < 32:
+            flags.append(f"button {m['smallestButton']:.0f}px")
+        if tap is False:
+            flags.append("tap-pat failed")
+        flags += probs
+        rows.append(f"{size} {m['mode']} kon {m['konH']}px" + (f" ✗ {', '.join(flags)}" if flags else " ok"))
+        p.shot("size-" + size)
+        if flags:
+            bad.append(size)
+    return not bad, "; ".join(rows)
 
 
 SCENARIOS = {
@@ -208,7 +348,10 @@ SCENARIOS = {
     "pounce": (stalk_and_pounce, "1440x900"),
     "leaf": (maple_leaf_chase, "1440x900"),
     "night": (lantern_night, "1440x900"),
+    "sparrow": (sparrow_hunt_and_scare, "1440x900"),
     "mobile": (mobile_touch, "390x844"),
+    "sparrow-touch": (sparrow_touch, "390x844"),
+    "sizes": (layout_at_sizes, "1600x1200"),
 }
 
 
@@ -234,15 +377,15 @@ def main():
                 try:
                     ok, info = SCENARIOS[n][0](page)
                     vw = page.js("return [innerWidth, innerHeight]")
-                    if list(vw) != [w, h]:
-                        ok, info = False, info + f" | viewport was {vw}, not {w}x{h}"
+                    if list(vw) != [page.w, page.h]:
+                        ok, info = False, info + f" | viewport was {vw}, not {page.w}x{page.h}"
                     errs = page.errors()
                     if errs:
                         ok, info = False, info + f" | page errors: {errs[:3]}"
                 except Exception as e:  # noqa: BLE001
                     ok, info = False, f"crashed: {e}"
                 failed += 0 if ok else 1
-                print(f"{'PASS' if ok else 'FAIL'}  {n:8s} [{size}]  {info}", flush=True)
+                print(f"{'PASS' if ok else 'FAIL'}  {n:13s} [{size}]  {info}", flush=True)
     sys.exit(1 if failed else 0)
 
 

@@ -179,6 +179,7 @@ export class Social {
 
   // ------------------------------------------------------------------ NOTICED
   enterNOTICED() {
+    if (this.arg.src === 'typing') this.speak('typingStop');
     this.arg.dur = randRange(this.rng, 0.2, 0.36);
     this.impulse({ type: 'flinch', s: 0.6 });
     this.say('noticed', true);
@@ -560,6 +561,7 @@ export class Social {
       return;
     }
     const lt = t - a.landT;
+    if (a.target === 'bird') { this.pounceBirdAfter(lt, s, P); return; }
     if (a.target === 'leaf') {
       // the leaf leaps away: Kon is delighted anyway
       const leaf = (s.objects || []).find((o) => o.kind === 'leaf');

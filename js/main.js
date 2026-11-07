@@ -21,6 +21,7 @@ import { arrive, touch, saveMemory } from './memory.js';
 import { DOODLE_KINDS } from './garden/rake.js';
 import { Mover } from './kon/mover.js';
 import { depthScale } from './garden/world.js';
+import { Birds, birdContext } from './garden/birds.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');
@@ -67,11 +68,15 @@ input = new InputTracker({
 const rig = new FoxRig($('kon'), { reducedMotion: reduced(), rng: rngFor(1) });
 const mover = new Mover({ seat: 'cushion' });
 const brain = new Brain({ reducedMotion: reduced(), rng: rngFor(2) });
+// a sparrow drops by now and then (scripted checks call it in with ?birds or __zen.birds.visit())
+const birds = new Birds({ parent: $('depth'), rng: rngFor(5), reduced: reduced(), auto: !manual || params.has('birds') });
+scene.visitor = birds;
 
 reducedMQ.addEventListener?.('change', () => {
   rig.setReducedMotion(reduced());
   brain.reduced = reduced();
   scene.reduced = reduced();
+  birds.reduced = reduced();
 });
 
 // --- touching Kon directly: boop the nose, pat the head ---
@@ -143,11 +148,12 @@ function updateCaption() {
   captionAt = c.at;
   const span = captionEl.firstElementChild;
   if (span.textContent === c.text) return;
-  if (manual) { span.textContent = c.text; return; }
+  if (manual) { span.textContent = c.text; scene.captionW = span.offsetWidth; return; }
   captionEl.classList.add('swap');
   clearTimeout(captionTimer);
   captionTimer = setTimeout(() => {
     span.textContent = c.text;
+    scene.captionW = span.offsetWidth;
     captionEl.classList.remove('swap');
   }, 200);
 }
@@ -192,6 +198,24 @@ if (!manual) {
   }, 5 * 60 * 1000);
 }
 
+// --- Kon's voice: a speech bubble near the head ---
+const saysEl = $('kon-says');
+const saysText = saysEl.firstElementChild;
+let saysAt = -1;
+let saysSize = [0, 0];
+function updateVoice(body) {
+  const v = brain.voice;
+  if (v.at !== saysAt) {
+    saysAt = v.at;
+    saysText.textContent = v.text;
+    saysSize = [saysEl.offsetWidth, saysEl.offsetHeight];
+    saysEl.classList.add('show');
+  }
+  const showing = v.text && brain.now - v.at < v.dur;
+  if (!showing) { saysEl.classList.remove('show'); return; }
+  scene.placeBubble(saysEl, body.head, rig.scale, saysSize);
+}
+
 // --- debug overlay (?debug) ---
 const debugEl = $('debug');
 const showDebug = params.has('debug');
@@ -211,6 +235,8 @@ function tick(dt, ts) {
   senses.self = mover.state();
   senses.body = rig.measure();
   senses.objects = scene.objects();
+  const bird = birds.object();
+  if (bird) senses.objects.push(bird);
   senses.places = scene.places;
   senses.night = scene.night;
   senses.layout = scene.mode;
@@ -219,7 +245,10 @@ function tick(dt, ts) {
   // the body follows the brain's wishes, with momentum and gravity
   mover.command(pose.move);
   for (const ev of mover.update(dt)) {
-    if (ev.type === 'step') scene.rake.pawPrint(ev.x, ev.y, ev.foot, ev.dir, depthScale(ev.y));
+    if (ev.type === 'step') {
+      scene.rake.pawPrint(ev.x, ev.y, ev.foot, ev.dir, depthScale(ev.y));
+      pose.impulses.push({ type: 'step', foot: ev.foot, s: ev.gait === 'sneak' ? 0.3 : ev.gait === 'trot' ? 1.3 : 1 });
+    }
     else if (ev.type === 'land') { pose.impulses.push({ type: 'land', s: ev.impact }); if (ev.kind === 'pounce') sound.play('clack', 0.4); }
   }
   const where = mover.state();
@@ -233,12 +262,19 @@ function tick(dt, ts) {
     else if (em.type === 'snailPoke') scene.hideSnail();
   }
   rig.update(dt, pose, where);
+  const body = rig.measure();
+  const clack = senses.events.some((e) => e.type === 'clack');
+  for (const ev of birds.update(dt, birdContext({ brain, kon: where, body, view: scene.vb, pointer: senses.pointer, clack, night: scene.night }))) {
+    if (ev.type === 'birdFlee' || ev.type === 'birdArrive') sound.play('flutter', ev.type === 'birdFlee' ? 1 : 0.6);
+    else if (ev.type === 'birdChirp') sound.play('chirp');
+    input.push(ev);
+  }
   scene.placeKon(where);
   scene.update(dt);
-  const body = rig.measure();
   scene.zen.update(dt, brain.zenInfo(), body.center);
   scene.updateCursor(dt, input.pointer);
   updateCaption();
+  updateVoice(body);
 
   if (showDebug && ts - debugAt > 100) {
     debugAt = ts;
@@ -254,7 +290,7 @@ function tick(dt, ts) {
   }
 }
 
-const zen = { brain, rig, scene, input, sound, mover };
+const zen = { brain, rig, scene, input, sound, mover, birds };
 
 if (manual) {
   // Test mode: time only moves when a script calls __zen.advance(seconds, fn).

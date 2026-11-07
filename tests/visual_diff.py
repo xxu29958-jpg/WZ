@@ -24,6 +24,8 @@ DEMOS = {
     "judge": "?demo=judge&t=5.2",
     "night": "?demo=night",
     "mobile": "?demo=at&to=basin&t=2|390x844",
+    "sparrow": "?demo=sparrow&perch=lantern&t=7",
+    "sparrow-head": "?demo=sparrow-head",
 }
 
 
@@ -56,16 +58,23 @@ def main():
         render(d, port)
         print(f"baseline: {len(os.listdir(d))} images in {d}")
         return
-    from PIL import Image, ImageChops
+    from PIL import Image, ImageChops, ImageFilter
     cur = d.rstrip("/") + "-now"
     render(cur, port)
     worst = 0
     for name in DEMOS:
+        if not os.path.exists(os.path.join(d, name + ".png")):
+            print(f"new     {name:8s} (no baseline yet)")
+            continue
         a = Image.open(os.path.join(d, name + ".png")).convert("RGB")
         b = Image.open(os.path.join(cur, name + ".png")).convert("RGB")
         diff = ImageChops.difference(a, b)
-        bbox = diff.getbbox()
-        changed = sum(1 for px in diff.getdata() if max(px) > 8) if bbox else 0
+        # Text anti-aliasing can shift by a sub-pixel between browser sessions, which leaves
+        # thin speckles along glyph edges. Real changes cover solid areas, so erode the
+        # difference mask by one pixel before counting.
+        mask = diff.convert("L").point(lambda v: 255 if v > 8 else 0).filter(ImageFilter.MinFilter(3))
+        bbox = mask.getbbox()
+        changed = sum(1 for v in mask.getdata() if v) if bbox else 0
         pct = 100 * changed / (a.width * a.height)
         worst = max(worst, pct)
         print(f"{'same   ' if pct < 0.01 else 'CHANGED'} {name:8s} {pct:.3f}% of pixels differ" + (f" in {bbox}" if bbox and pct >= 0.01 else ""))

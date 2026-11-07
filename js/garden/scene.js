@@ -69,7 +69,10 @@ export class Scene {
     this.depthEl = $('depth');
     this.sortables = Object.entries(SORT_Y).map(([id, y]) => ({ id, y, el: $(id) })).sort((a, b) => a.y - b.y);
     for (const o of this.sortables) this.depthEl.appendChild(o.el);
-    this.konBefore = null;
+    this.depthSig = '';
+    this.auraEl = $('aura');
+    this.konEl = $('kon');
+    this.visitor = null;
     this.konAt = { x: 800, y: 826, seat: 'cushion' };
     // camera: pans to follow Kon; far layers drift less (parallax)
     this.camX = 0;
@@ -193,23 +196,82 @@ export class Scene {
     layer.style.transformOrigin = `${f2(pivot.x)}px ${f2(pivot.y)}px`;
   }
 
+  /**
+   * Put Kon's speech bubble beside its head: try up-right, up-left, then the
+   * sides, keeping clear of the caption, branding, buttons and plaque.
+   * @param size  [width, height] of the bubble in px (measured when the text changes)
+   */
+  placeBubble(el, headWorld, konScale, size) {
+    const h = this.toScreen(headWorld.x, headWorld.y);
+    const R = 92 * konScale * this.scale;           // about the head's radius on screen
+    const [bw, bh] = size;
+    const pad = 8;
+    const avoid = this.protectedRects();
+    const fits = (x, y) => x >= pad && y >= pad && x + bw <= this.W - pad && y + bh <= this.H - pad;
+    const clear = (x, y) => !avoid.some((r) => x < r.right && x + bw > r.left && y < r.bottom && y + bh > r.top);
+    const cands = [
+      { x: h.x + R * 0.45, y: h.y - R * 1.15 - bh, tail: 'tail-left' },
+      { x: h.x - R * 0.45 - bw, y: h.y - R * 1.15 - bh, tail: 'tail-right' },
+      { x: h.x + R * 1.05, y: h.y - R * 0.6 - bh, tail: 'tail-left' },
+      { x: h.x - R * 1.05 - bw, y: h.y - R * 0.6 - bh, tail: 'tail-right' },
+      { x: h.x + R * 1.1, y: h.y + R * 0.1, tail: 'tail-left below' },
+      { x: h.x - R * 1.1 - bw, y: h.y + R * 0.1, tail: 'tail-right below' },
+    ];
+    let pick = cands.find((c) => fits(c.x, c.y) && clear(c.x, c.y)) || cands.find((c) => fits(c.x, c.y)) || cands[0];
+    const x = Math.min(Math.max(pick.x, pad), this.W - bw - pad);
+    const y = Math.min(Math.max(pick.y, pad), this.H - bh - pad);
+    el.style.left = `${f2(x)}px`;
+    el.style.top = `${f2(y)}px`;
+    if (el.dataset.tail !== pick.tail) {
+      el.classList.remove('tail-left', 'tail-right', 'below');
+      el.classList.add(...pick.tail.split(' '));
+      el.dataset.tail = pick.tail;
+    }
+    this.bubbleRect = { left: x, top: y, right: x + bw, bottom: y + bh };
+  }
+
+  /** Screen areas the bubble should not cover (cached per layout; caption and plaque move). */
+  protectedRects() {
+    if (!this.fixedRects || this.fixedRectsFor !== this.W + 'x' + this.H) {
+      this.fixedRectsFor = this.W + 'x' + this.H;
+      const app = this.app.getBoundingClientRect();
+      this.fixedRects = ['.brand', '.corner'].map((q) => document.querySelector(q)).filter(Boolean).map((e) => {
+        const r = e.getBoundingClientRect();
+        return { left: r.left - app.left - 6, top: r.top - app.top - 6, right: r.right - app.left + 6, bottom: r.bottom - app.top + 6 };
+      });
+    }
+    const out = [...this.fixedRects];
+    if (this.captionRect) out.push(this.captionRect);
+    if (this.emaPos && this.emaSize) {
+      const [w, h] = this.emaSize;
+      out.push({ left: this.emaPos.x - w / 2 - 6, top: this.emaPos.y - 20, right: this.emaPos.x + w / 2 + 6, bottom: this.emaPos.y + h + 6 });
+    }
+    return out;
+  }
+
   /** World → screen for things inside the moving world layer (as if the camera were at 0). */
   baseToScreen(x, y) {
     return { x: (x - this.baseVb.x) * this.scale, y: (y - this.baseVb.y) * this.scale };
   }
 
   /** Re-sort Kon among the scenery and remember where Kon is (camera, caption). */
+  /**
+   * Kon (with its aura) and any visitor (the sparrow: anything with `el` and
+   * `depthKey(konKey)`) are slotted between the scenery by where they meet the ground.
+   */
   placeKon(st) {
     this.konAt = st;
-    const key = st.seat ? SORT_Y[st.seat] + 0.5 : st.y;
-    const next = this.sortables.find((o) => o.y > key);
-    const id = next ? next.id : 'end';
-    if (id !== this.konBefore) {
-      this.konBefore = id;
-      const before = next ? next.el : null;
-      this.depthEl.insertBefore($('aura'), before);
-      this.depthEl.insertBefore($('kon'), before);
-    }
+    const konKey = st.seat ? SORT_Y[st.seat] + 0.5 : st.y;
+    const items = [{ key: konKey, els: [this.auraEl, this.konEl] }];
+    const v = this.visitor;
+    if (v && v.el && v.el.style.display !== 'none') items.push({ key: v.depthKey(konKey), els: [v.el] });
+    items.sort((a, b) => a.key - b.key);
+    const slots = items.map((it) => this.sortables.find((o) => o.y > it.key) || null);
+    const sig = items.map((it, i) => `${it.els[it.els.length - 1].id}<${slots[i] ? slots[i].id : 'end'}`).join(' ');
+    if (sig === this.depthSig) return;
+    this.depthSig = sig;
+    // inserting in key order before each slot keeps items that share a slot in order too
+    items.forEach((it, i) => { for (const el of it.els) this.depthEl.insertBefore(el, slots[i] ? slots[i].el : null); });
   }
 
   /** The narrator's line follows Kon around, just below its feet. */
@@ -226,6 +288,8 @@ export class Scene {
     y = Math.min(y, this.H - 26);
     cap.style.left = `${f2(x)}px`;
     cap.style.top = `${f2(y)}px`;
+    // the caption is centered on (x, y); remember its box so the speech bubble avoids it
+    this.captionRect = { left: x - this.captionW / 2 - 6, top: y - 18, right: x + this.captionW / 2 + 6, bottom: y + 18 };
   }
 
   /** A point on the maple (its own drawing units) → where it is in the world right now. */
@@ -259,6 +323,7 @@ export class Scene {
       cap.style.setProperty('--ui-scale', '0.92');
     }
     ema.classList.toggle('no-cord', !this.emaPos.cord);
+    this.emaSize = [ema.offsetWidth || 250, ema.offsetHeight || 140];
     const inp = ema.querySelector('input');
     inp.placeholder = 250 * ui < 215 ? 'Kon won’t peek…' : 'Kon promises not to peek…';
     this.placeEma(0);

@@ -8,6 +8,9 @@ import { analyzeStroke } from '../js/garden/rake.js';
 import { Mover } from '../js/kon/mover.js';
 import { bodyAt, isFree, planPath, POIS, OBSTACLES } from '../js/garden/world.js';
 import { TAU } from '../js/math.js';
+import { CAPTIONS } from '../js/kon/captions.js';
+import { VOICE } from '../js/kon/voice.js';
+import { Birds, birdContext } from '../js/garden/birds.js';
 
 const HEAD = { x: 800, y: 612 };
 const BODY = {
@@ -37,11 +40,19 @@ class Sim {
     this.track = [];
   }
   get self() { return this.mover.state(); }
+  /** Add a sparrow (it only comes when called, via sim.bird.visit). */
+  withBird(seed = 3) {
+    this.bird = new Birds({ rng: makeRng(seed), auto: false });
+    this.birdLog = [];
+    this.step();
+    return this.bird;
+  }
   get head() { const k = this.self; return bodyAt(k.x, k.y, k.h).head; }
   step() {
     const p = this.ptr;
     if (this.t - p.lastMove > 0.05) { p.vx *= 0.85; p.vy *= 0.85; }
     const self = this.mover.state();
+    const bird = this.bird && this.bird.object();
     const s = {
       now: this.t,
       pointer: { ...p, speed: Math.hypot(p.vx, p.vy) },
@@ -49,7 +60,7 @@ class Sim {
       events: this.events.splice(0),
       self,
       body: bodyAt(self.x, self.y, self.h),
-      objects: this.objects,
+      objects: bird ? [...this.objects, bird] : this.objects,
       places: PLACES,
       night: false,
       layout: this.layout,
@@ -58,6 +69,10 @@ class Sim {
     this.mover.command(P.move);
     this.mover.update(DT);
     const k = this.mover.state();
+    if (this.bird) {
+      const ctx = birdContext({ brain: this.brain, kon: k, body: bodyAt(k.x, k.y, k.h), view: { x: 0, y: 0, w: 1600, h: 1000 }, pointer: s.pointer });
+      for (const ev of this.bird.update(DT, ctx)) { this.events.push(ev); this.birdLog.push({ t: this.t, ...ev }); }
+    }
     if (!k.seat && !k.airborne) this.track.push({ x: k.x, y: k.y });
     for (const [k, v] of Object.entries(P)) {
       if (typeof v === 'number' && !Number.isFinite(v)) this.bad.push(`${k}=${v} @${this.t.toFixed(2)} in ${this.brain.state}`);
@@ -660,6 +675,137 @@ test('an important line is not talked over right away', (sim) => {
   sim.sweep(1.5);
   const key = sim.brain.caption.key;
   return { ok: key === 'night', info: `caption after 1.5 s of watching: ${key}` };
+});
+
+// ---------------------------------------------------------------- Kon's voice
+test('the narrator and Kon never say the same line for a moment', () => {
+  const alias = { lifeRack: 'readPlaques', classic: 'startled', cover: 'startled', pout: 'startled', bleh: 'startled', admireAfter: 'typingStop' };
+  const clashes = [];
+  for (const [key, lines] of Object.entries(CAPTIONS)) {
+    const v = VOICE[alias[key] || key];
+    if (!v) continue;
+    for (const l of lines) if (v.lines.some((x) => x.toLowerCase().replace(/[!.…?]/g, '') === l.toLowerCase().replace(/[!.…?]/g, ''))) clashes.push(`${key}: "${l}"`);
+  }
+  return { ok: clashes.length === 0, info: clashes.join('; ') || 'no shared lines' };
+});
+
+test('Kon speaks at key moments, one bubble at a time (urgent reactions may interrupt)', (sim) => {
+  const urgent = new Set(['startled', 'gotcha', 'sneeze', 'booped', 'satoriEnd', 'pounceMiss', 'typingWalk', 'typingStop']);
+  const said = [];
+  let last = -1;
+  const watch = () => { const v = sim.brain.voice; if (v.at !== last) { last = v.at; said.push({ ...v }); } };
+  sim.run(1, null, watch);
+  sim.run(3.2, () => sim.moveTo(800 + 430 * Math.sin(sim.t * 1.3), 300), watch);
+  sim.run(2, null, watch);
+  sim.approach();
+  sim.run(3, null, watch);
+  sim.events.push({ type: 'boop' });
+  sim.run(3, null, watch);
+  let piled = 0;
+  for (let i = 1; i < said.length; i++) {
+    if (said[i].at - said[i - 1].at < said[i - 1].dur && !urgent.has(said[i].key)) piled++;
+  }
+  const keys = said.map((v) => v.key);
+  return { ok: said.length >= 3 && piled === 0 && keys.includes('startled'), info: `said: ${said.map((v) => `${v.key}"${v.text}"`).join(', ')}; piled up: ${piled}` };
+});
+
+// ------------------------------------------------------------------ the sparrow
+const fled = (sim) => sim.birdLog.filter((e) => e.type === 'birdFlee').map((e) => e.reason);
+const untilPerched = (sim, max = 6) => { for (let i = 0; i < max * 60 && sim.bird.state !== 'perched'; i++) sim.step(); };
+
+test('sparrow: a still cursor far away is fine; a fast one close by sends it off, away from the cursor', (sim) => {
+  const b = sim.withBird();
+  sim.brain.zenArmed = false;
+  b.visit('lantern');
+  untilPerched(sim);
+  sim.moveTo(900, 300);
+  sim.run(3);
+  const stayed = b.state === 'perched';
+  // swoop in from the right
+  sim.run(0.5, (t) => sim.moveTo(900 - t * 1100, 420 + t * 160));
+  const reasons = fled(sim);
+  const dir = b.dir;
+  return { ok: stayed && reasons[0] === 'cursor' && dir < 0, info: `stayed while still: ${stayed}; fled: ${reasons.join(',') || 'no'}; flew ${dir < 0 ? 'left (away)' : 'right (toward)'}` };
+});
+
+test('sparrow: lands on Kon only during deep meditation, and leaves the moment Kon stirs', (sim) => {
+  const b = sim.withBird();
+  b.visit('kon');
+  const refused = b.perch && b.perch.id !== 'kon';   // Kon is not meditating: picks somewhere else
+  sim.run(8);
+  sim.bird.fly('test');
+  sim.run(3);
+  for (let i = 0; i < 40 * 60 && !sim.brain.isStill(); i++) sim.step();
+  const still = sim.brain.isStill();
+  sim.bird.nextVisit = 0;
+  b.visit('kon');
+  untilPerched(sim);
+  const onHead = b.state === 'perched' && b.perch.id === 'kon';
+  const head = sim.brain.s.body.crown;
+  const sitting = onHead && Math.hypot(b.x - head.x, b.y - head.y) < 2;
+  const stayedState = sim.brain.state;
+  sim.run(3);
+  const stillThere = b.state === 'perched';
+  // the visitor moves: meditation breaks, Kon stirs, the bird is gone
+  sim.sweep(1.2);
+  const gone = b.state !== 'perched';
+  return { ok: refused && still && onHead && sitting && stillThere && stayedState === 'ZAZEN' && gone && fled(sim).includes('kon stirred'),
+    info: `awake Kon refused: ${refused}; meditating: ${still}; on head: ${onHead} (on the crown: ${sitting}); stayed 3 s: ${stillThere}; fled when Kon stirred: ${gone}` };
+});
+
+test('Kon stalks a sparrow on the sand and pounces; the sparrow always gets away', (sim) => {
+  const outcomes = [];
+  for (const [seed, spot] of [[3, { x: 420, y: 960 }], [4, { x: 1130, y: 955 }], [5, { x: 330, y: 930 }], [6, { x: 520, y: 965 }]]) {
+    const s2 = new Sim(seed);
+    const b = s2.withBird(seed);
+    s2.brain.zenArmed = false;
+    b.visit('sand', spot);
+    let sneaked = 0, pounced = false, caught = false, crouch = 0;
+    s2.run(18, null, (P, sm) => {
+      const a = sm.brain.life.act;
+      if (a && a.id === 'bird' && sm.self.moving && sm.self.gait === 'sneak') { sneaked += DT; crouch = Math.max(crouch, P.crouch); }
+      if (sm.brain.state === 'POUNCE') pounced = true;
+      if (sm.brain.state === 'POUNCE' && sm.brain.arg.phase === 'land' && b.state === 'perched') caught = true;
+    });
+    outcomes.push({ sneaked, pounced, caught, crouch, fled: fled(s2), bad: s2.bad.length });
+  }
+  const pounces = outcomes.filter((o) => o.pounced).length;
+  const ok = pounces >= 3 && outcomes.every((o) => !o.caught && o.fled.length && !o.bad) && outcomes.filter((o) => o.pounced).every((o) => o.sneaked > 0.8 && o.crouch > 0.3);
+  return { ok, info: outcomes.map((o) => `${o.pounced ? 'pounced' : 'no pounce'} after ${o.sneaked.toFixed(1)} s creeping (crouch ${o.crouch.toFixed(2)}), bird: ${o.fled.join(',')}`).join(' | ') };
+});
+
+test('Kon watches a bird out of reach from below (no pounce), and leaves it alone while you type', (sim) => {
+  const runs = [];
+  for (const [seed, perch, at] of [[7, 'rack', { x: 1262, y: 838 }], [8, 'lantern', { x: 351, y: 810 }], [9, 'rack', { x: 1262, y: 838 }], [10, 'lantern', { x: 351, y: 810 }]]) {
+    const s1 = new Sim(seed);
+    const b = s1.withBird(seed);
+    s1.brain.zenArmed = false;
+    b.visit(perch);
+    const r = { watched: false, pounced: false, chatter: 0, dist: 0 };
+    s1.run(14, null, (P, sm) => {
+      const a = sm.brain.life.act;
+      if (a && a.id === 'bird' && a.phase === 'do') { r.watched = true; r.chatter = Math.max(r.chatter, P.mouthOpen); r.dist = Math.hypot(sm.self.x - at.x, sm.self.y - at.y); }
+      if (sm.brain.state === 'POUNCE') r.pounced = true;
+    });
+    runs.push(r);
+  }
+  const watchers = runs.filter((r) => r.watched);
+  const watched = watchers.length >= 2;
+  const pounced = runs.some((r) => r.pounced);
+  const chatter = Math.min(...watchers.map((r) => r.chatter));
+  const dist = Math.max(...watchers.map((r) => r.dist));
+  // now someone is typing: the bird is not more interesting than that
+  const s2 = new Sim(9);
+  const b2 = s2.withBird(9);
+  s2.typing.focused = true;
+  s2.typing.focusAt = s2.t;
+  b2.visit('sand', { x: 420, y: 960 });
+  let chased = false;
+  s2.run(8, (t, sm) => { if (Math.floor(t * 7) !== Math.floor((t - DT) * 7)) { sm.typing.lastInput = sm.t; sm.typing.chars++; } }, (P, sm) => {
+    const a = sm.brain.life.act;
+    if ((a && a.id === 'bird') || sm.brain.state === 'POUNCE') chased = true;
+  });
+  return { ok: watched && !pounced && chatter > 0.1 && dist < 420 && !chased, info: `watched in ${watchers.length}/4 visits, from ≤ ${dist.toFixed(0)} px, chattering ≥ ${chatter.toFixed(2)}, pounced: ${pounced}; chased while typing: ${chased}` };
 });
 
 export function runAll() {

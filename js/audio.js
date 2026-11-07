@@ -119,6 +119,13 @@ export class Sound {
       case 'leaves':
         this.noise(t, { d: 0.35, peak: 0.07, freq: 4500, q: 0.5 });
         break;
+      case 'flutter': // little wings: a few soft, quick beats
+        for (let i = 0; i < 5; i++) this.noise(t + i * 0.045, { d: 0.035, peak: 0.05 * k, freq: 2400 + i * 200, q: 0.9 });
+        break;
+      case 'chirp': // a sparrow's two-note cheep
+        this.tone(3900, t, { d: 0.05, peak: 0.05, glide: 1.25 });
+        this.tone(4400, t + 0.09, { d: 0.06, peak: 0.045, glide: 0.85 });
+        break;
       case 'lantern':
         this.noise(t, { d: 0.25, peak: 0.05, freq: 600, q: 0.6 });
         this.tone(330, t + 0.05, { d: 0.5, peak: 0.04 });

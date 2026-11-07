@@ -179,6 +179,30 @@ export function runDemo(zen, name, opts = {}) {
       document.getElementById('wish').requestSubmit();
       adv(1.6);
       break;
+    case 'sparrow': // a sparrow on a perch (?perch=lantern|rack|rock|basin|cushion); Kon may go and watch
+      cursor.hidden = true;
+      brain.zenArmed = false;
+      zen.birds.visit(opts.perch || 'lantern');
+      until(() => zen.birds.state === 'perched', 8);
+      adv(opts.t ?? 1.0);
+      break;
+    case 'sparrow-hunt': { // a sparrow on the sand: Kon creeps up (?phase=creep) and pounces (wiggle|air|land)
+      cursor.hidden = true;
+      brain.zenArmed = false;
+      zen.birds.visit('sand', { x: +opts.x || 420, y: +opts.y || 960 });
+      const phase = opts.phase || 'wiggle';
+      if (phase === 'creep') until(() => brain.life.act && brain.life.act.id === 'bird' && zen.mover.state().gait === 'sneak' && brain.life.act.t > 2, 25);
+      else until(() => brain.state === 'POUNCE' && brain.arg.phase === phase, 25);
+      adv(opts.t ?? 0.3);
+      break;
+    }
+    case 'sparrow-head': // deep meditation, and a sparrow takes a seat
+      cursor.hidden = true;
+      until(() => brain.isStill(), 30);
+      zen.birds.visit('kon');
+      until(() => zen.birds.state === 'perched', 8);
+      adv(opts.t ?? 2.4);
+      break;
     case 'tempt':
       cursor.hidden = true;
       until(() => brain.state === 'ZAZEN' && brain.zen.tempt && brain.stateT > brain.zen.temptAt + 1.0, 20);

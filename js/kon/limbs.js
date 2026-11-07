@@ -53,10 +53,13 @@ export class Limbs {
     if (!t) {
       // paws in the lap — or swinging along when walking
       const w = this.walk || { n: 0, phase: 0, facing: 0, stand: 0 };
-      const swing = Math.sin(w.phase + (sgn > 0 ? 0 : Math.PI)) * 9 * w.n;
+      // walking, the arms hang at the sides and swing against the legs (sideways
+      // when Kon walks across the garden, up and down when it walks toward or away)
+      const swing = Math.sin(w.phase + (sgn > 0 ? 0 : Math.PI)) * 14 * w.n;
+      const across = Math.abs(w.facing);
       return {
-        x: sgn * lerp(PAW_REST.x, 34, w.stand) + w.facing * swing,
-        y: lerp(PAW_REST.y, -40, w.stand) + Math.abs(swing) * 0.3,
+        x: sgn * lerp(PAW_REST.x, 38, w.stand) + w.facing * swing,
+        y: lerp(PAW_REST.y, -46, w.stand) + Math.abs(swing) * 0.35 * across - swing * 0.4 * (1 - across),
       };
     }
     if (t.space === 'head') return this.headToUpper(t.x, t.y);
@@ -112,8 +115,8 @@ export class Limbs {
         fx *= 0.8;
       } else if (walkN > 0.02) {
         const ph = phase + (side > 0 ? Math.PI : 0);
-        fx += facing * 9 * walkN * Math.cos(ph);
-        lift = Math.max(0, Math.sin(ph)) * 7 * walkN * this.motion;
+        fx += facing * 13 * walkN * Math.cos(ph);
+        lift = Math.max(0, Math.sin(ph)) * 10 * walkN * this.motion;
         fy += (1 - Math.abs(facing)) * Math.cos(ph) * 3 * walkN;
       }
       const sc = lerp(1, 0.66, stand);
@@ -136,8 +139,10 @@ export class Limbs {
     const g = this.g;
     this.tailSpeed = lerp(this.tailSpeed, P.tailSpeed ?? 0.6, 1 - Math.exp(-dt * 2));
     this.tailPhase += dt * TAU * this.tailSpeed;
-    const amp = s.tailAmp.step(dt, (P.tailAmp ?? 0.15) * (this.reduced ? 0.4 : 1));
-    const base = s.tailBase.step(dt, P.tailBase || 0);
+    // walking, the tail is carried higher and swings more
+    const walking = this.walk ? this.walk.n : 0;
+    const amp = s.tailAmp.step(dt, ((P.tailAmp ?? 0.15) + walking * 0.3) * (this.reduced ? 0.4 : 1));
+    const base = s.tailBase.step(dt, (P.tailBase || 0) - walking * 12);
     const curl = s.tailCurl.step(dt, P.tailCurl || 0);
 
     const pts = [];
