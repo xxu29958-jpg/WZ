@@ -284,6 +284,62 @@ def sparrow_touch(p):
     return landed and on_screen and scared, f"landed={landed} on screen at ({sx:.0f},{sy:.0f})={on_screen} tap scared it={scared}"
 
 
+# phones (portrait and landscape), tablets, laptops, big and ultra-wide screens
+SIZES = ["320x568", "375x667", "390x844", "414x896", "844x390", "768x1024", "1024x768", "1280x720", "1440x900", "1920x1080", "2560x1080"]
+
+
+def layout_at_sizes(p):
+    """Load the garden at many viewport sizes and check what's on screen, then make
+    Kon talk and check the bubble too. On phone sizes, also pat Kon with a tap."""
+    rows, bad = [], []
+    for size in SIZES:
+        w, h = map(int, size.split("x"))
+        p.w, p.h = w, h
+        p.load("motion=full", wait=1.4)
+        m = p.js("""
+          const z = window.__zen, R = (q) => { const e = document.querySelector(q); return e ? e.getBoundingClientRect() : null; };
+          const kon = document.querySelector('#kon-upper').getBoundingClientRect(), head = R('#kon-head');
+          const plaque = R('#wish .ema-board'), brand = R('.brand'), corner = R('.corner');
+          const hit = (a, b) => a && b && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+          const inside = (r, pad = 0) => r && r.left >= -pad && r.top >= -pad && r.right <= innerWidth + pad && r.bottom <= innerHeight + pad;
+          const btns = [...document.querySelectorAll('.corner button')].map((b) => b.getBoundingClientRect());
+          return { mode: z.scene.mode, vw: [innerWidth, innerHeight],
+            overflow: document.documentElement.scrollWidth > innerWidth || document.documentElement.scrollHeight > innerHeight,
+            konOn: inside(kon, 4), headOn: inside(head), plaqueOn: inside(plaque), plaqueOverHead: hit(plaque, head),
+            brandOverButtons: hit(brand, corner), brandOverHead: hit(brand, head), buttonsOverHead: hit(corner, head),
+            plaqueOverBrand: hit(plaque, brand), smallestButton: Math.min(...btns.map((b) => Math.min(b.width, b.height))),
+            konH: Math.round(kon.height) };""")
+        probs = []
+        p.check_layout("resting", probs)
+        # the help panel fits on screen (or scrolls)
+        hints = p.js("""document.getElementById('btn-hints').click(); const h = document.getElementById('hints'), r = h.getBoundingClientRect();
+          const ok = r.right <= innerWidth && r.left >= 0 && r.bottom <= innerHeight + 1 && (h.scrollHeight <= h.clientHeight + 1 || getComputedStyle(h).overflowY === 'auto');
+          document.getElementById('btn-hints').click(); return ok;""")
+        if not hints:
+            probs.append("help panel off-screen")
+        # say something: the bubble must find a free spot
+        p.js("window.__zen.brain.speak('typingWalk')")
+        time.sleep(0.5)
+        p.check_layout("speaking", probs)
+        tap = None
+        if w < 900:
+            hx, hy = p.head()
+            p.ff.tap(hx, hy - 18)
+            tap = p.wait_for("window.__zen.brain.state === 'PETTED'", 1.5)
+        flags = [k for k in ("overflow", "plaqueOverHead", "brandOverButtons", "brandOverHead", "buttonsOverHead", "plaqueOverBrand") if m[k]]
+        flags += [k for k in ("konOn", "headOn", "plaqueOn") if not m[k]]
+        if m["smallestButton"] < 32:
+            flags.append(f"button {m['smallestButton']:.0f}px")
+        if tap is False:
+            flags.append("tap-pat failed")
+        flags += probs
+        rows.append(f"{size} {m['mode']} kon {m['konH']}px" + (f" ✗ {', '.join(flags)}" if flags else " ok"))
+        p.shot("size-" + size)
+        if flags:
+            bad.append(size)
+    return not bad, "; ".join(rows)
+
+
 SCENARIOS = {
     "watch": (watch_stop_resume, "1440x900"),
     "startle": (rush_startle, "1440x900"),
@@ -295,6 +351,7 @@ SCENARIOS = {
     "sparrow": (sparrow_hunt_and_scare, "1440x900"),
     "mobile": (mobile_touch, "390x844"),
     "sparrow-touch": (sparrow_touch, "390x844"),
+    "sizes": (layout_at_sizes, "1600x1200"),
 }
 
 
@@ -320,8 +377,8 @@ def main():
                 try:
                     ok, info = SCENARIOS[n][0](page)
                     vw = page.js("return [innerWidth, innerHeight]")
-                    if list(vw) != [w, h]:
-                        ok, info = False, info + f" | viewport was {vw}, not {w}x{h}"
+                    if list(vw) != [page.w, page.h]:
+                        ok, info = False, info + f" | viewport was {vw}, not {page.w}x{page.h}"
                     errs = page.errors()
                     if errs:
                         ok, info = False, info + f" | page errors: {errs[:3]}"

@@ -479,6 +479,9 @@ html, body {
   right: max(22px, env(safe-area-inset-right));
   top: calc(max(22px, env(safe-area-inset-top)) + 54px);
   width: min(300px, calc(100vw - 44px));
+  max-height: calc(var(--vvh, 100vh) - 100px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 16px 18px 14px;
   background: #fbf6ea;
   border: 2px solid var(--ink);
@@ -534,6 +537,19 @@ html, body {
   .pill { width: 36px; height: 36px; font-size: 16px; }
   .hints { right: 16px; top: calc(max(18px, env(safe-area-inset-top)) + 48px); }
   .caption { white-space: normal; width: 86vw; }
+}
+
+/* phones held sideways: little height, so a compact header (and clear of the notch) */
+@media (max-height: 500px) and (orientation: landscape) {
+  .brand { left: max(18px, env(safe-area-inset-left)); top: 14px; gap: 10px; }
+  .seal { width: 38px; height: 38px; font-size: 16px; }
+  .wordmark { font-size: 26px; }
+  .tagline { font-size: 12px; }
+  .tagline .en { display: none; }
+  .tagline .zh { font-size: 14px; }
+  .corner { right: max(16px, env(safe-area-inset-right)); top: 14px; }
+  .pill { width: 36px; height: 36px; font-size: 16px; }
+  .hints { right: max(16px, env(safe-area-inset-right)); top: 60px; max-height: calc(var(--vvh, 100vh) - 76px); overflow-y: auto; }
 }
 
 /* keyboard open on phones: tuck the branding away */
