@@ -1,6 +1,6 @@
 """Run the behavior tests from the terminal (in a headless Firefox).
 
-    python3 tests/run.py [--url http://localhost:8070]
+    python3 tests/run.py [--url http://localhost:8070] [-v] [-k sparrow]
 
 Exits non-zero if any test fails.
 """
@@ -17,6 +17,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--url", default="http://localhost:8070")
     ap.add_argument("--port", type=int, default=2839)
+    ap.add_argument("-v", "--verbose", action="store_true", help="also print what each passing test measured")
+    ap.add_argument("-k", default="", help="only show tests whose name contains this")
     a = ap.parse_args()
     base = a.url.rstrip("/")
     with Firefox(1200, 900, port=a.port) as ff:
@@ -46,8 +48,12 @@ def main():
             res.append({"ok": False, "name": "boot " + path, "info": str(errs)})
     failed = [r for r in res if not r["ok"]]
     for r in res:
+        if a.k.lower() not in r["name"].lower():
+            continue
         if not r["ok"]:
             print(f"FAIL  {r['name']}\n      {r['info']}")
+        elif a.verbose:
+            print(f"ok    {r['name']}\n      {r['info']}")
     print(f"{len(res) - len(failed)} / {len(res)} passed")
     sys.exit(1 if failed else 0)
 
