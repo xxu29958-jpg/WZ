@@ -517,11 +517,11 @@ export class Scene {
       const spot = this.mapleToWorld(sp[0], sp[1]);
       const x = at && i === 0 ? at.x : spot.x;
       const y = at && i === 0 ? at.y : spot.y;
-      this.dropLeaf(x + (this.rng() * 2 - 1) * 20, y, i * 0.12);
+      this.dropLeaf(x + (this.rng() * 2 - 1) * 20, y, i * 0.12, true);
     }
   }
 
-  dropLeaf(x, y, delay = 0) {
+  dropLeaf(x, y, delay = 0, byVisitor = false) {
     if (this.leaves.length > 18) {
       const old = this.leaves.find((l) => l.landed);
       if (old) { old.g.remove(); this.leaves.splice(this.leaves.indexOf(old), 1); } else return;
@@ -536,7 +536,7 @@ export class Scene {
     this.leaves.push({
       g, x, y, vx, vy: 0, rot: this.rng() * 360,
       seed: this.rng() * 10, delay, landY, landed: false, landedAt: 0, id: 'leaf' + Math.floor(this.rng() * 1e6),
-      born: this.t,
+      born: this.t, byVisitor,
     });
   }
 
@@ -793,7 +793,7 @@ export class Scene {
       }
       if (!L.landed) {
         const tt = this.t + L.seed;
-        L.vy = lerp(L.vy, 62 + Math.sin(tt * 2.2) * 26, 1 - Math.exp(-dt * 3));
+        L.vy = lerp(L.vy, 84 + Math.sin(tt * 2.2) * 30, 1 - Math.exp(-dt * 3));
         L.x += (L.vx + Math.sin(tt * 1.7) * 38) * dt;
         L.y += L.vy * dt;
         L.rot += Math.sin(tt * 1.3) * 90 * dt;
@@ -894,7 +894,7 @@ export class Scene {
     if (newest && newest.y > this.vb.y) out.push({ id: newest.id, kind: 'leaf', x: newest.x, y: newest.y, sal: 0.48 });
     // leaves lying on the sand: not eye-catching, but Kon may go and pounce on one
     for (const L of this.leaves) {
-      if (L.landed && this.t - L.landedAt < 14 && !L.scattered) out.push({ id: L.id, kind: 'leafGround', x: L.x, y: L.y, sal: 0.05 });
+      if (L.landed && this.t - L.landedAt < 14 && !L.scattered) out.push({ id: L.id, kind: 'leafGround', x: L.x, y: L.y, sal: 0.05, byVisitor: L.byVisitor });
     }
     return out;
   }

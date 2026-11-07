@@ -689,11 +689,14 @@ export class Brain {
     if (!self) { this.restIdle(dt, s, P); return; }
     if (!L.act) {
       this.restIdle(dt, s, P);
+      const fresh = this.reachableLeaf(s);
+      if (fresh && fresh.byVisitor && !this.greet) { L.leafSeen[fresh.id] = true; L.act = { id: 'leaf', phase: 'go', leafId: fresh.id, t: 0 }; this.idleAct = null; return; }
       if (this.now > L.restUntil && !this.idleAct && !this.greet) {
         const leaf = this.reachableLeaf(s);
         if (leaf) {
           L.leafSeen[leaf.id] = true;
-          if (this.rng() < 0.75) { L.act = { id: 'leaf', phase: 'go', leafId: leaf.id, t: 0 }; return; }
+          // leaves you shook loose are irresistible; stray ones only sometimes
+          if (leaf.byVisitor || this.rng() < 0.6) { L.act = { id: 'leaf', phase: 'go', leafId: leaf.id, t: 0 }; return; }
         }
         L.act = this.pickActivity(s);
       }
@@ -704,7 +707,7 @@ export class Brain {
       const leaf = this.reachableLeaf(s);
       if (leaf) {
         L.leafSeen[leaf.id] = true;
-        if (this.rng() < 0.75) { L.act = { id: 'leaf', phase: 'go', leafId: leaf.id, t: 0 }; this.idleAct = null; }
+        if (leaf.byVisitor || this.rng() < 0.6) { L.act = { id: 'leaf', phase: 'go', leafId: leaf.id, t: 0 }; this.idleAct = null; }
       }
     }
     const a = L.act;

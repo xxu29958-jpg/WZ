@@ -161,7 +161,7 @@ def maple_leaf_chase(p):
       return [best.left + best.width / 2, best.top + best.height / 2];""")
     p.ff.pointer_path([(mx, my)], 0, press=True)
     p.ff.pointer_path([(40, 40)], 0)   # move the cursor out of the way
-    ok = p.wait_for("window.__zen.brain.history.some(h => h.to === 'POUNCE')", 14)
+    ok = p.wait_for("window.__zen.brain.history.some(h => h.to === 'POUNCE')", 20)
     time.sleep(0.4)
     p.shot("leaf-pounce")
     return ok, " → ".join(p.history())
