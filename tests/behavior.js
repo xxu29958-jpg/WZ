@@ -8,6 +8,8 @@ import { analyzeStroke } from '../js/garden/rake.js';
 import { Mover } from '../js/kon/mover.js';
 import { bodyAt, isFree, planPath, POIS, OBSTACLES } from '../js/garden/world.js';
 import { TAU } from '../js/math.js';
+import { CAPTIONS } from '../js/kon/captions.js';
+import { VOICE } from '../js/kon/voice.js';
 
 const HEAD = { x: 800, y: 612 };
 const BODY = {
@@ -660,6 +662,38 @@ test('an important line is not talked over right away', (sim) => {
   sim.sweep(1.5);
   const key = sim.brain.caption.key;
   return { ok: key === 'night', info: `caption after 1.5 s of watching: ${key}` };
+});
+
+// ---------------------------------------------------------------- Kon's voice
+test('the narrator and Kon never say the same line for a moment', () => {
+  const alias = { lifeRack: 'readPlaques', classic: 'startled', cover: 'startled', pout: 'startled', bleh: 'startled', admireAfter: 'typingStop' };
+  const clashes = [];
+  for (const [key, lines] of Object.entries(CAPTIONS)) {
+    const v = VOICE[alias[key] || key];
+    if (!v) continue;
+    for (const l of lines) if (v.lines.some((x) => x.toLowerCase().replace(/[!.…?]/g, '') === l.toLowerCase().replace(/[!.…?]/g, ''))) clashes.push(`${key}: "${l}"`);
+  }
+  return { ok: clashes.length === 0, info: clashes.join('; ') || 'no shared lines' };
+});
+
+test('Kon speaks at key moments, one bubble at a time (urgent reactions may interrupt)', (sim) => {
+  const urgent = new Set(['startled', 'gotcha', 'sneeze', 'booped', 'satoriEnd', 'pounceMiss', 'typingWalk', 'typingStop']);
+  const said = [];
+  let last = -1;
+  const watch = () => { const v = sim.brain.voice; if (v.at !== last) { last = v.at; said.push({ ...v }); } };
+  sim.run(1, null, watch);
+  sim.run(3.2, () => sim.moveTo(800 + 430 * Math.sin(sim.t * 1.3), 300), watch);
+  sim.run(2, null, watch);
+  sim.approach();
+  sim.run(3, null, watch);
+  sim.events.push({ type: 'boop' });
+  sim.run(3, null, watch);
+  let piled = 0;
+  for (let i = 1; i < said.length; i++) {
+    if (said[i].at - said[i - 1].at < said[i - 1].dur && !urgent.has(said[i].key)) piled++;
+  }
+  const keys = said.map((v) => v.key);
+  return { ok: said.length >= 3 && piled === 0 && keys.includes('startled'), info: `said: ${said.map((v) => `${v.key}"${v.text}"`).join(', ')}; piled up: ${piled}` };
 });
 
 export function runAll() {

@@ -646,3 +646,44 @@ html, body {
 .leg-ol { fill: none; stroke: var(--ink); stroke-width: 17; stroke-linecap: round; }
 .leg-fill { fill: none; stroke: var(--sock); stroke-width: 11; stroke-linecap: round; }
 .paw-print { fill: rgba(176, 150, 108, .55); }
+
+/* ---------- Kon's speech bubble ---------- */
+.kon-says {
+  position: absolute;
+  left: 0; top: 0;
+  z-index: 9;
+  max-width: 230px;
+  padding: 6px 13px 8px;
+  background: #fffaf0;
+  border: 2px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 0 2px 0 var(--ink);
+  font-family: var(--font-hand);
+  font-size: 18px;
+  line-height: 1.2;
+  color: var(--ink);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  scale: .6;
+  transition: opacity .16s ease, scale .24s cubic-bezier(.3, 1.6, .5, 1);
+}
+.kon-says.show { opacity: 1; scale: 1; }
+.kon-says::after {
+  /* the little tail, pointing back at Kon's mouth */
+  content: "";
+  position: absolute;
+  bottom: -8px;
+  width: 12px; height: 12px;
+  background: #fffaf0;
+  border-right: 2px solid var(--ink);
+  border-bottom: 2px solid var(--ink);
+}
+.kon-says.tail-left { transform-origin: 18px 110%; }
+.kon-says.tail-left::after { left: 16px; transform: rotate(45deg) skew(12deg, 12deg); }
+.kon-says.tail-right { transform-origin: calc(100% - 18px) 110%; }
+.kon-says.tail-right::after { right: 16px; transform: rotate(45deg) skew(12deg, 12deg); }
+.kon-says.below::after { bottom: auto; top: -8px; transform: rotate(225deg) skew(12deg, 12deg); }
+.is-night .kon-says { background: #f8efd8; }
+@media (max-width: 640px) { .kon-says { font-size: 16px; max-width: 200px; } }
+@media (prefers-reduced-motion: reduce) { .kon-says { transition-duration: .01s; } }

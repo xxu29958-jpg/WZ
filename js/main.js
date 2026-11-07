@@ -143,11 +143,12 @@ function updateCaption() {
   captionAt = c.at;
   const span = captionEl.firstElementChild;
   if (span.textContent === c.text) return;
-  if (manual) { span.textContent = c.text; return; }
+  if (manual) { span.textContent = c.text; scene.captionW = span.offsetWidth; return; }
   captionEl.classList.add('swap');
   clearTimeout(captionTimer);
   captionTimer = setTimeout(() => {
     span.textContent = c.text;
+    scene.captionW = span.offsetWidth;
     captionEl.classList.remove('swap');
   }, 200);
 }
@@ -190,6 +191,24 @@ if (!manual) {
     const next = scene.setTimeOfDay(hourNow());
     if (next !== period) { period = next; input.push({ type: 'daytime', period }); }
   }, 5 * 60 * 1000);
+}
+
+// --- Kon's voice: a speech bubble near the head ---
+const saysEl = $('kon-says');
+const saysText = saysEl.firstElementChild;
+let saysAt = -1;
+let saysSize = [0, 0];
+function updateVoice(body) {
+  const v = brain.voice;
+  if (v.at !== saysAt) {
+    saysAt = v.at;
+    saysText.textContent = v.text;
+    saysSize = [saysEl.offsetWidth, saysEl.offsetHeight];
+    saysEl.classList.add('show');
+  }
+  const showing = v.text && brain.now - v.at < v.dur;
+  if (!showing) { saysEl.classList.remove('show'); return; }
+  scene.placeBubble(saysEl, body.head, rig.scale, saysSize);
 }
 
 // --- debug overlay (?debug) ---
@@ -242,6 +261,7 @@ function tick(dt, ts) {
   scene.zen.update(dt, brain.zenInfo(), body.center);
   scene.updateCursor(dt, input.pointer);
   updateCaption();
+  updateVoice(body);
 
   if (showDebug && ts - debugAt > 100) {
     debugAt = ts;

@@ -77,6 +77,27 @@ class Page:
     def errors(self):
         return self.js("return window.__errors || []")
 
+    def layout_problems(self):
+        """Overlaps between the speech bubble, caption, branding, buttons and plaque,
+        and text spilling off-screen — measured from the real on-screen boxes."""
+        return self.js("""
+          const box = (q) => { const e = document.querySelector(q); if (!e) return null;
+            const st = getComputedStyle(e); if (st.display === 'none' || +st.opacity < 0.5) return null;
+            const r = e.getBoundingClientRect(); return r.width && r.height ? r : null; };
+          const B = { bubble: box('#kon-says.show'), caption: box('#caption span'), brand: box('.brand'),
+                      buttons: box('.corner'), plaque: box('#wish .ema-board') };
+          const hit = (a, b) => a && b && a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+          const out = [];
+          for (const o of ['caption', 'brand', 'buttons', 'plaque']) if (hit(B.bubble, B[o])) out.push('bubble×' + o);
+          for (const o of ['plaque', 'brand', 'buttons']) if (hit(B.caption, B[o])) out.push('caption×' + o);
+          for (const k of ['bubble', 'caption']) { const r = B[k]; if (r && (r.left < 0 || r.top < 0 || r.right > innerWidth || r.bottom > innerHeight)) out.push(k + ' off-screen'); }
+          return out;""")
+
+    def check_layout(self, moment, problems):
+        bad = self.layout_problems()
+        if bad:
+            problems.append(f"{moment}: {', '.join(bad)}")
+
 
 def sweep_points(cx, cy, ax, ay, n=40, turns=1.5):
     return [(cx + ax * math.sin(i / n * turns * 2 * math.pi), cy + ay * math.sin(i / n * turns * 4 * math.pi)) for i in range(n + 1)]
@@ -89,13 +110,16 @@ def watch_stop_resume(p):
     p.ff.pointer_path(sweep_points(hx, hy - 260, 380, 30), duration_ms=3600)
     peeking = p.js("return window.__zen.brain.state === 'WATCH' && window.__zen.brain.cur > 0.5")
     p.shot("watch-peek")
+    probs = []
+    p.check_layout("peek", probs)
     ok_pretend = p.wait_for("window.__zen.brain.state === 'PRETENDING'", 3)
     time.sleep(0.8)
     p.shot("watch-pretend")
     time.sleep(0.8)
+    p.check_layout("pretend", probs)
     p.ff.pointer_path(sweep_points(hx, hy - 260, 300, 20, turns=1), duration_ms=2400)
     resumed = "RESUMING" in p.history()
-    return peeking and ok_pretend and resumed, f"peeking={peeking} pretend={ok_pretend} resumed={resumed}; {' → '.join(p.history())}"
+    return peeking and ok_pretend and resumed and not probs, f"peeking={peeking} pretend={ok_pretend} resumed={resumed} layout={probs or 'ok'}; {' → '.join(p.history())}"
 
 
 def rush_startle(p):
@@ -106,14 +130,21 @@ def rush_startle(p):
     ok = p.wait_for("window.__zen.brain.history.some(h => h.to === 'STARTLED')", 2)
     time.sleep(0.15)
     p.shot("rush-startle")
-    return ok, " → ".join(p.history())
+    said = p.js("return window.__zen.brain.voice.key")
+    probs = []
+    p.check_layout("startle", probs)
+    return ok and said == "startled" and not probs, f"Kon said: {said}; layout={probs or 'ok'}; " + " → ".join(p.history())
 
 
 def typing_walks_over(p):
     p.load("motion=full")
     box = p.js("const r = document.getElementById('wish-input').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2];")
     p.ff.pointer_path([(box[0], box[1])], 0, press=True)
-    p.ff.type_keys("a quiet morning", delay_ms=140)
+    p.ff.type_keys("a quiet", delay_ms=140)
+    probs = []
+    p.check_layout("typing (walking over)", probs)
+    said = p.js("return window.__zen.brain.voice.key")
+    p.ff.type_keys(" morning", delay_ms=140)
     p.ff.type_keys(" with tea", delay_ms=160)
     time.sleep(0.2)
     k = p.kon()
@@ -123,7 +154,8 @@ def typing_walks_over(p):
     time.sleep(0.6)
     p.shot("typing-pretend")
     value_untouched = p.js("return document.getElementById('wish-input').value") == "a quiet morning with tea"
-    return near < 40 and ok_pretend and value_untouched, f"distance to reading spot {near:.0f}; pretended={ok_pretend}; {' → '.join(p.history())}"
+    p.check_layout("typing (pretending)", probs)
+    return near < 40 and ok_pretend and value_untouched and not probs, f"distance to reading spot {near:.0f}; pretended={ok_pretend}; said={said}; layout={probs or 'ok'}; {' → '.join(p.history())}"
 
 
 def rake_circle_judged(p):
@@ -151,6 +183,11 @@ def stalk_and_pounce(p):
     ok_air = p.wait_for("window.__zen.brain.state === 'POUNCE' && window.__zen.brain.arg.phase === 'air' && window.__zen.mover.state().jumpU > 0.4", 4)
     p.shot("pounce-air")
     ok_after = p.wait_for("window.__zen.brain.state === 'PRETENDING'", 5)
+    time.sleep(0.3)
+    p.shot("pounce-miss")
+    probs = []
+    p.check_layout("after the pounce", probs)
+    ok_after = ok_after and not probs
     return ok_air and ok_after, f"stalkT={stalking:.2f} airborne={ok_air} then pretended={ok_after}; {' → '.join(p.history())}"
 
 
@@ -196,8 +233,10 @@ def mobile_touch(p):
     judged = p.wait_for("window.__zen.brain.history.some(h => h.to === 'JUDGE')", 2)
     time.sleep(3.5)
     p.shot("mobile-judge")
+    probs = []
+    p.check_layout("phone, judging", probs)
     overflow = p.js("return document.documentElement.scrollWidth > innerWidth || document.documentElement.scrollHeight > innerHeight")
-    return mode == "tall" and patted and judged and not overflow, f"mode={mode} patted={patted} judged={judged} overflow={overflow}"
+    return mode == "tall" and patted and judged and not overflow and not probs, f"mode={mode} patted={patted} judged={judged} overflow={overflow} layout={probs or 'ok'}"
 
 
 SCENARIOS = {

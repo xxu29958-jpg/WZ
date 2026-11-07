@@ -179,6 +179,7 @@ export class Social {
 
   // ------------------------------------------------------------------ NOTICED
   enterNOTICED() {
+    if (this.arg.src === 'typing') this.speak('typingStop');
     this.arg.dur = randRange(this.rng, 0.2, 0.36);
     this.impulse({ type: 'flinch', s: 0.6 });
     this.say('noticed', true);

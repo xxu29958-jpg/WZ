@@ -20,10 +20,11 @@
 //   JUDGE       grading a circle you raked in the sand
 //   DIZZY, PETTED, BOOPED, ADMIRE   easter-egg reactions
 
-import { clamp, lerp, damp, Bag, pick, TAU, wrapAngle } from '../math.js';
+import { clamp, lerp, damp, Bag, pick, TAU, wrapAngle, makeRng } from '../math.js';
 import { ACTS, PRETEND_ACTS, IDLE_ACTS, TEMPT_ACTS } from './acts.js';
 import { pushOut } from '../garden/world.js';
 import { CAPTIONS } from './captions.js';
+import { VOICE, voiceDuration } from './voice.js';
 import { mixin } from '../util.js';
 import { Life } from './life.js';
 import { Social } from './social.js';
@@ -52,6 +53,9 @@ export function neutralPose() {
   };
 }
 
+// narrator keys that map to a different voice key, and voice lines that may interrupt
+const VOICE_ALIAS = { lifeRack: 'readPlaques', classic: 'startled', cover: 'startled', pout: 'startled', bleh: 'startled', admireAfter: 'typingStop' };
+const URGENT_VOICE = new Set(['startled', 'gotcha', 'sneeze', 'booped', 'satoriEnd', 'pounceMiss', 'typingWalk', 'typingStop']);
 const REACTIVE = new Set(['IDLE', 'WATCH', 'PRETENDING', 'RESUMING', 'RELAXING', 'DROWSY']);
 const ACTIVITY_EVENTS = new Set(['down', 'tap', 'focus', 'input', 'boop', 'pat', 'rakeStart', 'submit']);
 
@@ -106,6 +110,8 @@ export class Brain {
     this.pretendBag = new Bag(PRETEND_ACTS, rng);
     this.idleBag = new Bag(IDLE_ACTS.flatMap(([n, w]) => Array(Math.round(w * 2)).fill(n)), rng);
     this.caption = { text: '', key: '', at: 0 };
+    this.voice = { text: '', key: '', at: -10, dur: 0 };  // Kon's own speech bubble
+    this.voiceRng = makeRng(17);                         // separate, so talking never changes behavior
     this.lastLines = {};
     this.history = [];
     this.emits = [];
@@ -136,6 +142,24 @@ export class Brain {
 
   sayText(text, key = 'custom') {
     this.caption = { text, key, at: this.now };
+    this.speak(key);
+  }
+
+  /**
+   * Maybe say something in Kon's own voice for this moment. One bubble at a
+   * time, except for reactions that can't wait (a startle, a sneeze).
+   */
+  speak(key) {
+    const k = VOICE_ALIAS[key] || key;
+    const v = VOICE[k];
+    if (!v) return;
+    const cur = this.voice;
+    const busy = this.now - cur.at < cur.dur + 0.35;
+    if (busy && !URGENT_VOICE.has(k)) return;
+    if (this.voiceRng() > v.chance) return;
+    let line = pick(this.voiceRng, v.lines);
+    if (v.lines.length > 1 && line === cur.text) line = v.lines[(v.lines.indexOf(line) + 1) % v.lines.length];
+    this.voice = { text: line, key: k, at: this.now, dur: voiceDuration(line) };
   }
 
   // ------------------------------------------------------------------ helpers
@@ -158,6 +182,7 @@ export class Brain {
     if (lines.length > 1 && line === this.lastLines[key]) line = lines[(lines.indexOf(line) + 1) % lines.length];
     this.lastLines[key] = line;
     this.caption = { text: line, key, at: this.now, hold: force ? 2.6 : 1.4 };
+    this.speak(key);
   }
 
   headAway(dx, dy) {
