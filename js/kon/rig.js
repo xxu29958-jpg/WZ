@@ -268,7 +268,8 @@ export class FoxRig {
 
     // ---- head ----
     const hf = P.headFollow ?? 0.5;
-    const yaw = s.yaw.step(dt, clamp(gx * hf + P.yaw + bodyYaw * 0.45, -1, 1), snapMul, zMin);
+    // the head turns with the body (a three-quarter view when walking)
+    const yaw = s.yaw.step(dt, clamp(gx * hf + P.yaw + bodyYaw * 0.7, -1, 1), snapMul, zMin);
     const pitch = s.pitch.step(dt, clamp(gy * hf * 0.85 + P.pitch, -1, 1), snapMul, zMin);
     const tilt = s.tilt.step(dt, (P.tilt + gx * hf * 3) * m, 1, zMin);
 
@@ -278,7 +279,8 @@ export class FoxRig {
     const walkLean = facing * walkN * 5 + Math.sin(phase) * 1.8 * walkN;
     const lean = s.lean.step(dt, (P.lean + gx * bf * 13 + walkLean) * m, snapMul, zMin);
     const leanV = (lean - leanPrev) / Math.max(dt, 1e-4);
-    const reachX = s.reachX.step(dt, (P.reachX + gx * bf * 30) * m, snapMul, zMin);
+    // walking, the head leads the body a little
+    const reachX = s.reachX.step(dt, (P.reachX + gx * bf * 30 + facing * walkN * 7) * m, snapMul, zMin);
     const reachY = s.reachY.step(dt, (P.reachY + gy * bf * 10) * m, snapMul, zMin);
     const airStretch = airborne && loco.jumpU < 0.55 ? 0.35 : 0;
     const stretch = s.stretch.step(dt, (P.stretch + airStretch) * m, snapMul, zMin);
@@ -291,8 +293,11 @@ export class FoxRig {
     const hScale = s.headScale.step(dt, P.headScale ?? 1);
 
     const g = this.g;
-    g.sy = 1 + stretch * 0.15 - crouch * 0.13 + br * 0.013 * (P.breath ? 1 : 1);
-    g.sx = 1 / Math.sqrt(Math.max(0.6, g.sy)) + crouch * 0.03;
+    // a footfall squashes the body a touch; it stretches again between steps
+    const contact = walkN * (1 - Math.abs(Math.sin(phase))) * m;
+    g.sy = 1 + stretch * 0.15 - crouch * 0.13 + br * 0.013 - contact * 0.035;
+    // turned three-quarters, the body reads a little narrower
+    g.sx = (1 / Math.sqrt(Math.max(0.6, g.sy)) + crouch * 0.03) * (1 - Math.abs(bodyYaw) * 0.06);
     g.lean = lean * DEG;
     g.hop = hop * m + float;
     g.tilt = tilt * DEG;
@@ -303,8 +308,8 @@ export class FoxRig {
     g.faceX = yaw * 11;
     g.faceY = pitch * 7;
     // standing up on the legs, with a little bounce on every step
-    const bob = walkN > 0 ? -Math.abs(Math.sin(phase)) * (loco.gait === 'trot' ? 6 : 3.4) * walkN * m : 0;
-    g.upperY = -21 * stand + bob;
+    const bob = walkN > 0 ? -Math.abs(Math.sin(phase)) * (loco.gait === 'trot' ? 8 : 5) * walkN * m : 0;
+    g.upperY = -24 * stand + bob;
     g.stand = stand;
     g.bodyYaw = bodyYaw;
 
@@ -319,8 +324,8 @@ export class FoxRig {
     el.body.setAttribute('transform', `${tr(0, g.hop)} rotate(${f2(lean)})`);
     el.upper.setAttribute('transform', tr(0, g.upperY));
     el.torso.setAttribute('transform', `scale(${f2(g.sx)} ${f2(g.sy)})`);
-    el.belly.setAttribute('transform', tr(bodyYaw * 10, 0));
-    el.bib.setAttribute('transform', `translate(${f2(bodyYaw * 8)} ${f2(-110 * (g.sy - 1))}) scale(${f2(g.sx)} 1)`);
+    el.belly.setAttribute('transform', tr(bodyYaw * 15, 0));
+    el.bib.setAttribute('transform', `translate(${f2(bodyYaw * 12)} ${f2(-110 * (g.sy - 1))}) scale(${f2(g.sx)} 1)`);
     el.head.setAttribute('transform', `${tr(g.hx, g.hy)} rotate(${f2(tilt)}) scale(${f2(g.hsx)} ${f2(g.hsy)})`);
     el.face.setAttribute('transform', tr(g.faceX, g.faceY));
     el.mask.setAttribute('transform', tr(yaw * 7, pitch * 4.5));
@@ -408,6 +413,15 @@ export class FoxRig {
       case 'hop':
         s.hop.v -= 300 * k * m;
         break;
+      case 'step': {
+        // each footfall jiggles the ears, the tuft and the bell a little
+        const k2 = (imp.s ?? 1) * m;
+        s.earL.v += 70 * k2;
+        s.earR.v -= 70 * k2;
+        s.ahoge.v += (imp.foot === 'l' ? 1 : -1) * 160 * k2;
+        s.bell.v += (imp.foot === 'l' ? 1 : -1) * 40 * k2;
+        break;
+      }
       case 'land':
         s.crouch.v += 9 * k * m;
         s.earL.v -= 260 * k;

@@ -219,7 +219,10 @@ function tick(dt, ts) {
   // the body follows the brain's wishes, with momentum and gravity
   mover.command(pose.move);
   for (const ev of mover.update(dt)) {
-    if (ev.type === 'step') scene.rake.pawPrint(ev.x, ev.y, ev.foot, ev.dir, depthScale(ev.y));
+    if (ev.type === 'step') {
+      scene.rake.pawPrint(ev.x, ev.y, ev.foot, ev.dir, depthScale(ev.y));
+      pose.impulses.push({ type: 'step', foot: ev.foot, s: ev.gait === 'sneak' ? 0.3 : ev.gait === 'trot' ? 1.3 : 1 });
+    }
     else if (ev.type === 'land') { pose.impulses.push({ type: 'land', s: ev.impact }); if (ev.kind === 'pounce') sound.play('clack', 0.4); }
   }
   const where = mover.state();
