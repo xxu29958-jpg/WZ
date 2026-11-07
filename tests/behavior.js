@@ -615,6 +615,53 @@ test('a raked circle → Kon walks over before judging it', (sim) => {
   return { ok: maxAway > 80 && sign === 8, info: `walked ${maxAway.toFixed(0)} units; card=${sign}; ${sim.states.join(' → ')}` };
 });
 
+// ---------------------------------------------------------------- living and resting together
+const awayAt = (sim, poi, act) => {
+  sim.mover = new Mover({ seat: null, x: POIS[poi].stand.x, y: POIS[poi].stand.y });
+  sim.brain.life.restUntil = 0;
+  sim.brain.life.act = { id: poi, def: { act }, phase: 'do', t: 0, dur: 5, run: sim.brain.makeAct ? null : null };
+};
+
+test('being still while Kon is busy elsewhere: Kon finishes, walks home, then meditates', (sim) => {
+  sim.still(0.1);
+  awayAt(sim, 'basin', null);
+  let zazenSeat = null;
+  sim.run(60, null, () => { if (sim.brain.state === 'ZAZEN' && zazenSeat === null) zazenSeat = sim.self.seat; });
+  const homeGoing = sim.brain.history.findIndex((h) => h.to === 'ZAZEN');
+  return { ok: zazenSeat === 'cushion', info: `meditation began on: ${zazenSeat}; ${sim.states.join(' → ')}` };
+});
+
+test('getting sleepy away from home: Kon walks home before dozing off', (sim) => {
+  sim.still(0.1);
+  sim.brain.zenArmed = false; // already meditated today
+  awayAt(sim, 'shishi', null);
+  let drowsySeat = null;
+  sim.run(70, null, () => { if (sim.brain.state === 'DROWSY' && drowsySeat === null) drowsySeat = sim.self.seat; });
+  return { ok: drowsySeat === 'cushion', info: `dozed off on: ${drowsySeat}; ${sim.states.join(' → ')}` };
+});
+
+test('a click counts as activity (meditation waits)', (sim) => {
+  sim.still(5);
+  sim.events.push({ type: 'down', x: 300, y: 300 });
+  sim.still(5);
+  return { ok: !sim.states.includes('ZAZEN') && sim.brain.idleFor < 6, info: `idleFor=${sim.brain.idleFor.toFixed(1)}; ${sim.states.join(' → ')}` };
+});
+
+test('a leaf that lands out of reach is ignored', (sim) => {
+  sim.still(3);
+  sim.objects = [{ id: 'far', kind: 'leafGround', x: 1420, y: 900, sal: 0.05 }];
+  sim.still(6);
+  return { ok: !sim.states.includes('POUNCE'), info: sim.states.join(' → ') };
+});
+
+test('an important line is not talked over right away', (sim) => {
+  sim.still(1);
+  sim.events.push({ type: 'night', on: true });
+  sim.sweep(1.5);
+  const key = sim.brain.caption.key;
+  return { ok: key === 'night', info: `caption after 1.5 s of watching: ${key}` };
+});
+
 export function runAll() {
   const results = [];
   for (const { name, fn } of tests) {

@@ -15,6 +15,7 @@ export const GAITS = {
   walk: { speed: 95, stride: 26, accel: 420 },
   trot: { speed: 235, stride: 42, accel: 900 },
   sneak: { speed: 42, stride: 18, accel: 260 },
+  stroll: { speed: 58, stride: 21, accel: 300 },
 };
 const DEPTH_K = 0.8; // walking toward/away from you covers fewer screen units
 

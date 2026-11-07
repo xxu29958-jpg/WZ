@@ -49,7 +49,7 @@ export const POIS = {
   basin: { stand: { x: 364, y: 914 }, face: 1, look: { x: 471, y: 884 } },
   lantern: { stand: { x: 474, y: 848 }, face: -1, look: { x: 330, y: 584 } },
   snail: { stand: { x: 424, y: 844 }, face: -1, look: { x: 352, y: 744 } },
-  rack: { stand: { x: 1092, y: 830 }, face: 1, look: { x: 1300, y: 690 } },
+  rack: { stand: { x: 1060, y: 828 }, face: 1, look: { x: 1300, y: 690 } },
   shishi: { stand: { x: 704, y: 944 }, face: -1, look: { x: 520, y: 862 } },
   maple: { stand: { x: 1010, y: 762 }, face: 1, look: { x: 1180, y: 300 } },
   rock: { platform: 'rock', look: { x: 1180, y: 320 } },

@@ -531,8 +531,10 @@ export class Scene {
     g.style.opacity = delay > 0 ? '0' : '1';
     // land in front of Kon's cushion, never behind it
     let landY = 868 + this.rng() * 110;
+    // the breeze carries leaves from the branch out over the garden
+    const vx = (this.rng() * 2 - 1) * 14 - 8 - Math.max(0, x - 1000) * 0.09;
     this.leaves.push({
-      g, x, y, vx: (this.rng() * 2 - 1) * 14 - 8, vy: 0, rot: this.rng() * 360,
+      g, x, y, vx, vy: 0, rot: this.rng() * 360,
       seed: this.rng() * 10, delay, landY, landed: false, landedAt: 0, id: 'leaf' + Math.floor(this.rng() * 1e6),
       born: this.t,
     });

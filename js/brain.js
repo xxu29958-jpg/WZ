@@ -151,7 +151,7 @@ export class Brain {
     let line = pick(this.rng, lines);
     if (lines.length > 1 && line === this.lastLines[key]) line = lines[(lines.indexOf(line) + 1) % lines.length];
     this.lastLines[key] = line;
-    this.caption = { text: line, key, at: this.now };
+    this.caption = { text: line, key, at: this.now, hold: force ? 2.6 : 1.4 };
   }
 
   impulse(imp) { this.P.impulses.push(imp); }
@@ -416,6 +416,9 @@ export class Brain {
       if (this.state === 'ZAZEN') this.zenBreak = true;
     }
     switch (ev.type) {
+      case 'down':
+        this.lastActive = this.now;
+        break;
       case 'rakeStart':
         this.lastActive = this.now;
         if (asleep || this.state === 'DROWSY') this.go('WAKING');
@@ -550,18 +553,22 @@ export class Brain {
     const fresh = s.typing.focused && this.now - s.typing.focusAt < 3;
     if (this.typeActive || (fresh && this.typeI > 0.24)) { this.dropLife(); this.go('WATCH', { from: 'idle' }); return; }
     const self = s.self || { seat: 'cushion' };
-    // enlightenment is exhausting
-    if (this.arg.afterSatori && this.idleFor > 26 && this.stateT > 6 && !this.idleAct) { this.go('DROWSY'); return; }
-    if (!this.zenArmed && !this.arg.afterSatori && this.idleFor > 40 && !this.idleAct && !this.life.act) { this.go('DROWSY'); return; }
-    // perfect stillness → go home to the cushion, then truly meditate
+    const home = self.seat === 'cushion' && !self.airborne;
+    const resting = !this.life.act || (this.life.act.id === 'home' && this.life.act.phase === 'do');
+    // sleepiness: after enlightenment, or after a very long quiet spell — but only at home
+    const sleepy = (this.arg.afterSatori && this.idleFor > 26 && this.stateT > 6) || (!this.zenArmed && !this.arg.afterSatori && this.idleFor > 40);
+    if (sleepy && !this.idleAct && resting) {
+      if (home) { this.dropLife(); this.go('DROWSY'); return; }
+      this.goHome('sleep');
+    }
+    // perfect stillness → true meditation, starting from rest on the cushion
     if (this.zenArmed && this.idleFor > ZAZEN_AFTER && this.stateT > 1 && !s.typing.focused && !this.greet) {
-      if (self.seat === 'cushion' && !self.airborne) {
+      if (home && resting) {
         const act = this.idleAct ? this.idleAct.name : '';
         if (!act || ['lookAround', 'viewer', 'earTwitch', 'meditateAttempt'].includes(act)) { this.dropLife(); this.go('ZAZEN'); return; }
-      } else if (!this.life.act || !this.life.act.zen) {
-        this.life.act = { id: 'home', def: ACTIVITIES[0], phase: 'go', zen: true, t: 0, dur: 1 };
-        this.idleAct = null;
-        this.say('homeForZen', true);
+      } else if (!home && !this.life.act && this.idleFor > 16) {
+        // Kon finished what it was doing and the garden is still: time to go home
+        this.goHome('zen');
       }
     }
 
@@ -589,6 +596,15 @@ export class Brain {
   }
 
   // ------------------------------------------------------------------ a life in the garden
+  /** Head back to the cushion — to meditate, or because Kon is sleepy. */
+  goHome(why) {
+    const a = this.life.act;
+    if (a && a.id === 'home' && a.why === why) return;
+    this.life.act = { id: 'home', def: ACTIVITIES[0], phase: 'go', zen: why === 'zen', why, t: 0, dur: 1, gait: why === 'sleep' ? 'stroll' : 'walk' };
+    this.idleAct = null;
+    this.say(why === 'sleep' ? 'homeForSleep' : 'homeForZen', true);
+  }
+
   dropLife(rest = randRange(this.rng, 2, 4)) {
     this.life.act = null;
     this.life.restUntil = this.now + rest;
@@ -627,7 +643,8 @@ export class Brain {
       if (d.id === 'rock' && self.seat === 'rock') continue;
       const last = this.life.lastVisit[d.id] ?? -1e9;
       const novelty = 1 - Math.exp(-(this.now - last) / 50);
-      const w = s.night && d.nightWeight ? d.nightWeight : d.weight;
+      let w = s.night && d.nightWeight ? d.nightWeight : d.weight;
+      if (d.id === 'home' && this.idleFor > 12) w *= 3; // a quiet garden draws Kon back to the cushion
       const at = d.id === 'home' ? { x: 800, y: 870 } : d.id === 'rock' ? { x: 1079, y: 940 } : d.id === 'wander' ? { x: 800, y: 900 } : POIS[d.id].stand;
       const dist = Math.hypot(at.x - self.x, at.y - self.y);
       const u = w * novelty * (0.55 + this.rng() * 0.9) / (1 + dist / 1100);
@@ -644,7 +661,7 @@ export class Brain {
   /** Where an activity happens and how to hold position there. */
   activityDest(a, s) {
     const g = a.gait || 'walk';
-    if (a.id === 'home') return { move: { seat: 'cushion', gait: 'walk' }, hold: { seat: 'cushion' }, seat: 'cushion' };
+    if (a.id === 'home') return { move: { seat: 'cushion', gait: a.gait || 'walk' }, hold: { seat: 'cushion' }, seat: 'cushion' };
     if (a.id === 'rock') return { move: { seat: 'rock', gait: g }, hold: { seat: 'rock' }, seat: 'rock', look: POIS.rock.look };
     if (a.id === 'wander') {
       a.spot = a.spot || randomSpot(this.rng);
@@ -673,7 +690,7 @@ export class Brain {
     if (!L.act) {
       this.restIdle(dt, s, P);
       if (this.now > L.restUntil && !this.idleAct && !this.greet) {
-        const leaf = (s.objects || []).find((o) => o.kind === 'leafGround' && !L.leafSeen[o.id]);
+        const leaf = this.reachableLeaf(s);
         if (leaf) {
           L.leafSeen[leaf.id] = true;
           if (this.rng() < 0.75) { L.act = { id: 'leaf', phase: 'go', leafId: leaf.id, t: 0 }; return; }
@@ -684,7 +701,7 @@ export class Brain {
     }
     // a leaf just landed: that beats any casual plan (but not going home to meditate)
     if (!L.act.zen && L.act.id !== 'leaf') {
-      const leaf = (s.objects || []).find((o) => o.kind === 'leafGround' && !L.leafSeen[o.id]);
+      const leaf = this.reachableLeaf(s);
       if (leaf) {
         L.leafSeen[leaf.id] = true;
         if (this.rng() < 0.75) { L.act = { id: 'leaf', phase: 'go', leafId: leaf.id, t: 0 }; this.idleAct = null; }
@@ -723,11 +740,18 @@ export class Brain {
     P.move = dest.hold;
     if (a.run) this.runAct(a.run, dt, P);
     else this.restIdle(dt, s, P);
-    if (a.t > a.dur) {
+    if (a.why && a.t > 8) { this.dropLife(3); return; } // arrived home and nothing happened after all
+    if (a.t > a.dur && !a.why) {
       L.lastVisit[a.id] = this.now;
       this.idleAct = null;
       this.dropLife(a.id === 'home' ? randRange(this.rng, 6, 12) : randRange(this.rng, 3, 7));
     }
+  }
+
+  /** A freshly landed leaf that Kon can actually get to. */
+  reachableLeaf(s) {
+    return (s.objects || []).find((o) => o.kind === 'leafGround' && !this.life.leafSeen[o.id] &&
+      o.x > BOUNDS.x0 - 30 && o.x < BOUNDS.x1 + 40 && o.y > BOUNDS.y0 && o.y < BOUNDS.y1 + 40);
   }
 
   /** Where Kon goes to read over your shoulder. */
@@ -861,7 +885,7 @@ export class Brain {
     // narrator
     const label = c < 0.3 ? 'OBSERVING' : c < 0.66 ? 'CURIOUS' : 'PEEKING';
     // never talk over a line that was just said (e.g. "So close.")
-    if (label !== this.label && this.now - this.labelAt > 1.3 && this.now - this.caption.at > 1.4) {
+    if (label !== this.label && this.now - this.labelAt > 1.3 && this.now - this.caption.at > (this.caption.hold || 1.4)) {
       this.label = label;
       this.labelAt = this.now;
       const key = (src === 'typing' ? 'typing' : '') + (src === 'typing' ? label[0] + label.slice(1).toLowerCase() : label.toLowerCase());

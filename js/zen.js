@@ -69,6 +69,22 @@ export class ZenFX {
     this.mode = 'painting';
   }
 
+  /** Turn the painted ink to gold leaf, keeping every bristle's texture (alpha). */
+  gild() {
+    const g = this.g;
+    const c = this.live.width / 2;
+    const grad = g.createRadialGradient(c, c * 0.8, c * 0.2, c, c, c);
+    grad.addColorStop(0, '#fbe3a0');
+    grad.addColorStop(0.55, '#e8b44c');
+    grad.addColorStop(1, '#c98a24');
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'source-atop';
+    g.fillStyle = grad;
+    g.fillRect(0, 0, this.live.width, this.live.height);
+    g.restore();
+  }
+
   fadeOut() {
     const token = ++this.clearToken;
     this.live.classList.add('fading');
@@ -106,6 +122,7 @@ export class ZenFX {
       if (this.mode !== 'satori') {
         if (this.mode !== 'painting') this.startPainting();
         this.step = brush.paintSteps(this.g, this.step, brush.steps);
+        this.gild();
         this.live.classList.add('gold');
         this.stampSeal(info.satoriCount || 1);
         this.mode = 'satori';

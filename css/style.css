@@ -550,7 +550,7 @@ html, body {
 #enso-live { opacity: 1; transition: opacity .9s ease, filter 1.6s ease; }
 #enso-live.fading { opacity: 0; }
 #enso-live.gold {
-  filter: sepia(1) saturate(3.4) hue-rotate(-14deg) brightness(1.28) drop-shadow(0 0 10px rgba(255, 196, 90, .55));
+  filter: drop-shadow(0 0 10px rgba(255, 196, 90, .6));
 }
 
 /* spirit brush */

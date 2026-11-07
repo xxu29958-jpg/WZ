@@ -82,6 +82,7 @@ export const CAPTIONS = {
   lifeSniff: ['Kon smells something interesting.', 'Kon is investigating the sand.'],
   lifeHome: ['Kon returns to the cushion.', 'Back to practice.'],
   homeForZen: ['Kon heads back to the cushion. Something feels quiet.', 'The garden is still. Kon goes home.'],
+  homeForSleep: ['Kon shuffles home for a nap.', 'Yawn. Kon heads for the cushion.'],
   typingWalk: ['Kon wanders over. Casually.', 'Kon happens to be passing by.'],
   stalk: ['Kon is hunting.', 'Something small is moving in the sand…'],
   pounce: ['POUNCE.', 'Hup!'],
