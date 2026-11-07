@@ -30,7 +30,8 @@ SNAP = """
 const z = window.__zen, b = z.brain, m = z.mover.state();
 return { t: z.rig.t, state: b.state, act: b.debug().act, life: b.life.act ? b.life.act.id + ':' + b.life.act.phase : '',
          x: Math.round(m.x), y: Math.round(m.y), h: Math.round(m.h), seat: m.seat, moving: m.moving,
-         caption: b.caption.text, cam: Math.round(z.scene.camX) };
+         caption: b.caption.text, cam: Math.round(z.scene.camX),
+         bird: z.birds.state === 'away' ? '' : z.birds.state + (z.birds.perch ? '@' + z.birds.perch.id : '') };
 """
 
 
@@ -74,7 +75,7 @@ def main():
     with open(os.path.join(a.out, "report.json"), "w") as f:
         json.dump(report, f, indent=1)
     for s in timeline:
-        print(f"{s['wall']:5.1f}s {s['state']:11s} life={s['life']:16s} act={s['act']:12s} at=({s['x']},{s['y']}) h={s['h']} seat={s['seat']} cam={s['cam']}  \"{s['caption']}\"")
+        print(f"{s['wall']:5.1f}s {s['state']:11s} life={s['life']:16s} act={s['act']:12s} at=({s['x']},{s['y']}) h={s['h']} seat={s['seat']} cam={s['cam']}" + (f" bird={s['bird']}" if s.get('bird') else "") + f"  \"{s['caption']}\"")
     print("frames:", stats)
     print("errors:", errors)
 
