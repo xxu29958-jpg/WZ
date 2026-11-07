@@ -69,4 +69,23 @@ export const CAPTIONS = {
   lateNight: ['It’s late. Kon is surprised you’re awake.', 'A night visitor. Kon lit the lantern for you.'],
   dusk: ['Evening falls on the garden.', 'Dusk. The lantern is warming up.'],
   dawn: ['An early visitor. Kon is barely awake.', 'Dawn. The sand is cold.'],
+
+  // a life in the garden
+  lifeDrink: ['Kon is having a drink.', 'Sip. Sip. Sip.'],
+  lifeLantern: ['Kon checks on the lantern.', 'Kon warms its paws at the lantern.'],
+  lifeSnail: ['Kon has found the snail again.', 'Kon and the snail have an understanding.'],
+  lifeRack: ['Kon reads other people’s wishes. For research.', 'So many wishes.'],
+  lifeShishi: ['Kon is waiting for the bamboo to tip.', 'Any moment now…'],
+  lifeShishiClack: ['TOK! Kon jumps. Every single time.', 'It got Kon again.'],
+  lifeRock: ['Kon is sunbathing on the warm rock.', 'The rock is warm. Kon approves.'],
+  lifeMaple: ['Kon is counting leaves.', 'One leaf. Two leaves. Many leaves.'],
+  lifeSniff: ['Kon smells something interesting.', 'Kon is investigating the sand.'],
+  lifeHome: ['Kon returns to the cushion.', 'Back to practice.'],
+  homeForZen: ['Kon heads back to the cushion. Something feels quiet.', 'The garden is still. Kon goes home.'],
+  typingWalk: ['Kon wanders over. Casually.', 'Kon happens to be passing by.'],
+  stalk: ['Kon is hunting.', 'Something small is moving in the sand…'],
+  pounce: ['POUNCE.', 'Hup!'],
+  pounceMiss: ['Nothing there. Kon meant to do that.', 'Kon was only stretching.'],
+  pounceLeaf: ['Kon caught a leaf. Briefly.', 'The leaf escapes. Kon is delighted.'],
+  judgeWalk: ['Kon goes to look at your circle.', 'Kon will be the judge of that.'],
 };

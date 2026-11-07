@@ -7,6 +7,7 @@ import { Spring, clamp, lerp, smoothstep, TAU, DEG, makeRng, noise1, randRange }
 import { EnsoBrush } from './enso.js';
 import { ZenFX } from './zen.js';
 import { SandRake } from './rake.js';
+import { SORT_Y, depthScale } from './world.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const $ = (id) => document.getElementById(id);
@@ -26,6 +27,8 @@ export const PLACES = {
   sky: { x: 900, y: 120 },
   flower: { x: 670, y: 774 },
   snail: { x: 352, y: 744 },
+  basinWater: { x: 471, y: 884 },
+  bambooTube: { x: 500, y: 846 },
 };
 
 const LEAF_COLORS = ['#e2483a', '#ec6a3a', '#f08a3c', '#e9a13a', '#d6402e', '#f2b04a'];
@@ -74,6 +77,17 @@ export class Scene {
     this.zen = new ZenFX({ scene: this, brush: this.brush, reducedMotion });
     this.rake = new SandRake({ canvas: $('sand-canvas'), scene: this, emit: (ev) => this.emit(ev) });
     this.cursorGlow = { x: 0, y: 0, trail: [], on: false, built: false };
+    // depth: scenery that stands on the ground, sorted by where it meets the ground
+    this.depthEl = $('depth');
+    this.sortables = Object.entries(SORT_Y).map(([id, y]) => ({ id, y, el: $(id) })).sort((a, b) => a.y - b.y);
+    for (const o of this.sortables) this.depthEl.appendChild(o.el);
+    this.konBefore = null;
+    this.konAt = { x: 800, y: 826, seat: 'cushion' };
+    // camera: pans to follow Kon; far layers drift less (parallax)
+    this.camX = 0;
+    this.camV = 0;
+    this.appliedCamX = null;
+    this.captionW = 300;
     this.bindInteractions();
   }
 
@@ -113,20 +127,42 @@ export class Scene {
       const cx = (f.x0 + f.x1) / 2, cy = (f.y0 + f.y1) / 2;
       vb = { x: cx - w / 2, y: cy - h / 2 - (h - (f.y1 - f.y0)) * 0.08, w, h };
     }
-    this.vb = vb;
+    this.baseVb = vb;
     this.scale = W / vb.w;
+    this.paintGrain(W, H);
+    this.W = W;
+    this.H = H;
+    this.rake.layout();
+    this.applyView();
+  }
+
+  /** Where the camera should be, given where Kon is. */
+  cameraTarget() {
+    const kx = this.konAt.x - 800;
+    if (this.mode === 'wide') return clamp(kx * 0.3, -70, 70);
+    return clamp(kx, -470, 370);
+  }
+
+  /** Point every layer at the current camera position (cheap; no redraws). */
+  applyView() {
+    const vb = { ...this.baseVb, x: this.baseVb.x + this.camX };
+    this.vb = vb;
+    this.appliedCamX = this.camX;
     const vbs = `${f2(vb.x)} ${f2(vb.y)} ${f2(vb.w)} ${f2(vb.h)}`;
     for (const el of [this.back, this.svg, this.glow]) {
       el.setAttribute('viewBox', vbs);
       el.setAttribute('preserveAspectRatio', 'xMidYMid slice');
     }
+    // parallax: hills barely move, trees a little, the wall almost with the ground
+    const c = this.camX;
+    $('sky').setAttribute('transform', `translate(${f2(c * 0.78)} 0)`);
+    $('trees').setAttribute('transform', `translate(${f2(c * 0.5)} 0)`);
+    $('wall').setAttribute('transform', `translate(${f2(c * 0.15)} 0)`);
+    $('moon').setAttribute('transform', `translate(${f2(c * 0.9)} 0)`);
     // the ensō canvas sits between the two SVG layers at world (530, 330, 540 × 540)
     const e = this.toScreen(530, 330);
     const enso = $('enso');
     enso.style.transform = `translate(${f2(e.x)}px, ${f2(e.y)}px) scale(${(540 * this.scale / enso.width).toFixed(4)})`;
-    this.paintGrain(W, H);
-    this.W = W;
-    this.H = H;
     // the maple always leans in from the top-right corner of whatever is visible
     const ms = this.mode === 'wide' ? 1 : 0.7;
     // clear the branding on tall screens; with the keyboard up, lift it out of view
@@ -136,12 +172,37 @@ export class Scene {
     PLACES.maple = this.mapleToWorld(1220, 150);
     this.positionOverlays();
     this.zen.layout();
-    // the rake canvas is reallocated only when the framing really changed
-    const key = `${W}x${H}@${f2(vb.x)},${f2(vb.y)},${f2(vb.w)}`;
-    if (key !== this.rakeKey) {
-      this.rakeKey = key;
-      this.rake.layout();
+    this.rake.place();
+  }
+
+  /** Re-sort Kon among the scenery and remember where Kon is (camera, caption). */
+  placeKon(st) {
+    this.konAt = st;
+    const key = st.seat ? SORT_Y[st.seat] + 0.5 : st.y;
+    const next = this.sortables.find((o) => o.y > key);
+    const id = next ? next.id : 'end';
+    if (id !== this.konBefore) {
+      this.konBefore = id;
+      const before = next ? next.el : null;
+      this.depthEl.insertBefore($('aura'), before);
+      this.depthEl.insertBefore($('kon'), before);
     }
+  }
+
+  /** The narrator's line follows Kon around, just below its feet. */
+  placeCaption() {
+    const cap = this.caption;
+    const k = this.konAt;
+    const ds = depthScale(k.y);
+    let p = this.toScreen(k.x, k.y + 74 * ds);
+    const half = this.captionW / 2 + 14;
+    let x = clamp(p.x, half, this.W - half);
+    if (half * 2 > this.W) x = this.W / 2;
+    let y = p.y;
+    if (this.mode !== 'wide') y = Math.min(y, (this.emaPos ? this.emaPos.y : this.H) - 22);
+    y = Math.min(y, this.H - 26);
+    cap.style.left = `${f2(x)}px`;
+    cap.style.top = `${f2(y)}px`;
   }
 
   mapleToWorld(x, y) {
@@ -168,9 +229,6 @@ export class Scene {
       ema.style.setProperty('--ui-scale', ui.toFixed(3));
       const a = this.toScreen(1300, 646);
       this.emaPos = { x: a.x, y: a.y + 12 * ui, cord: true };
-      const c = this.toScreen(800, 900);
-      cap.style.left = `${c.x}px`;
-      cap.style.top = `${c.y}px`;
       cap.style.setProperty('--ui-scale', clamp(s, 0.85, 1.3).toFixed(3));
     } else {
       ui = clamp(this.W / 390, 0.92, 1.2);
@@ -179,17 +237,13 @@ export class Scene {
       const bottomPad = this.mode === 'compact' ? 10 : Math.max(22, this.H * 0.04);
       const top = this.H - emaH - bottomPad;
       this.emaPos = { x: this.W / 2, y: top, cord: false };
-      // caption between the cushion and the plaque (or above Kon when squeezed)
-      const cushion = this.toScreen(800, 860).y;
-      const cy = this.mode === 'compact' ? this.toScreen(800, 430).y + 6 : (cushion + top) / 2;
-      cap.style.left = `${this.W / 2}px`;
-      cap.style.top = `${cy}px`;
       cap.style.setProperty('--ui-scale', '0.92');
     }
     ema.classList.toggle('no-cord', !this.emaPos.cord);
     const inp = ema.querySelector('input');
     inp.placeholder = 250 * ui < 215 ? 'Kon won’t peek…' : 'Kon promises not to peek…';
     this.placeEma(0);
+    this.placeCaption();
   }
 
   placeEma(swing) {
@@ -419,7 +473,7 @@ export class Scene {
     $('flower').addEventListener('click', () => this.pokeFlower(1));
     $('snail').addEventListener('click', (e) => {
       stop(e);
-      this.snailHideUntil = this.t + 3.2;
+      this.hideSnail();
       this.emit({ type: 'notice', x: PLACES.snail.x, y: PLACES.snail.y });
       this.emit({ type: 'sfx', name: 'boop' });
     });
@@ -482,6 +536,10 @@ export class Scene {
       seed: this.rng() * 10, delay, landY, landed: false, landedAt: 0, id: 'leaf' + Math.floor(this.rng() * 1e6),
       born: this.t,
     });
+  }
+
+  hideSnail() {
+    this.snailHideUntil = this.t + 3.2;
   }
 
   pokeFlower(k = 1) {
@@ -593,6 +651,15 @@ export class Scene {
     this.t += dt;
     const t = this.t;
     this.rake.update(dt);
+    // camera follows Kon (critically damped, so it never overshoots)
+    if (this.baseVb) {
+      const w = 2 * Math.PI * 0.45;
+      const target = this.reduced ? Math.round(this.cameraTarget() / 120) * 120 : this.cameraTarget();
+      this.camV += (w * w * (target - this.camX) - 2 * w * this.camV) * dt;
+      this.camX += this.camV * dt;
+      if (this.appliedCamX === null || Math.abs(this.camX - this.appliedCamX) > 0.03) this.applyView();
+      else this.placeCaption();
+    }
     this.updateShishi(dt);
     this.updateMaple(dt);
     this.updateLeaves(dt);
@@ -823,6 +890,21 @@ export class Scene {
       if (!newest || L.born > newest.born) newest = L;
     }
     if (newest && newest.y > this.vb.y) out.push({ id: newest.id, kind: 'leaf', x: newest.x, y: newest.y, sal: 0.48 });
+    // leaves lying on the sand: not eye-catching, but Kon may go and pounce on one
+    for (const L of this.leaves) {
+      if (L.landed && this.t - L.landedAt < 14 && !L.scattered) out.push({ id: L.id, kind: 'leafGround', x: L.x, y: L.y, sal: 0.05 });
+    }
     return out;
+  }
+
+  /** Kon landed on a leaf: it flies up and flutters down again a little way off. */
+  scatterLeaf(id) {
+    const L = this.leaves.find((l) => l.id === id);
+    if (!L) return;
+    L.landed = false;
+    L.scattered = true;
+    L.vy = -170;
+    L.vx = (this.rng() * 2 - 1) * 60;
+    L.landY = Math.min(990, L.y + 10 + this.rng() * 30);
   }
 }

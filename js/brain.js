@@ -21,7 +21,8 @@
 //   DIZZY, PETTED, BOOPED, ADMIRE   easter-egg reactions
 
 import { clamp, lerp, smoothstep, bump, damp, Bag, randRange, pick, TAU, wrapAngle } from './math.js';
-import { ACTS, PRETEND_ACTS, IDLE_ACTS, TEMPT_ACTS } from './acts.js';
+import { ACTS, PRETEND_ACTS, IDLE_ACTS, TEMPT_ACTS, ACTIVITIES } from './acts.js';
+import { POIS, SAND_TOP, BOUNDS, randomSpot, pushOut } from './world.js';
 import { CAPTIONS } from './captions.js';
 
 export function neutralPose() {
@@ -39,6 +40,8 @@ export function neutralPose() {
     tailAmp: 0.15, tailSpeed: 0.6, tailBase: 0, tailCurl: 0,
     breath: 1, snap: 0, blink: true, sleepy: false,
     float: 0, sign: null,
+    posture: null,             // 'sit' | 'stand' (null: decided from movement)
+    move: null,                // a wish for the mover: { to, seat, gait, face, tol, leap }
     fx: { notes: 0, zzz: 0, bubble: 0, hearts: 0 },
     impulses: [],
   };
@@ -107,6 +110,12 @@ export class Brain {
     this.satoriCount = 0;
     this.temptBag = new Bag(TEMPT_ACTS, rng);
     this.greet = null;         // a hello queued for a returning visitor
+
+    // a life of its own: what Kon is up to when nobody is watching
+    this.life = { act: null, restUntil: 4, lastVisit: {}, leafSeen: {} };
+    this.stalkT = 0;
+    this.approaching = false;
+    this.standUntil = 0;
   }
 
   /** What the garden needs to know to paint the live ensō. */
@@ -172,6 +181,8 @@ export class Brain {
       emit: (type, data) => this.emit(type, data),
       impulse: (imp) => this.impulse(imp),
       body: () => this.s.body,
+      facing: this.s.self ? this.s.self.faceDir : 1,
+      night: !!this.s.night,
       spots: this.lookSpots(),
       ...extra,
     };
@@ -218,6 +229,7 @@ export class Brain {
     if (!this.started) {
       this.started = true;
       this.lastActive = s.now;
+      this.life.restUntil = s.now + 5; // sit a while before wandering off
       this.say('intro');
     }
 
@@ -228,6 +240,11 @@ export class Brain {
 
     const tick = this['tick' + this.state];
     tick.call(this, dt, s, P);
+    // stand while moving and for a moment after; otherwise sit down
+    if (s.self) {
+      if (s.self.moving) this.standUntil = this.now + 1.1;
+      if (P.posture == null) P.posture = this.now < this.standUntil ? 'stand' : 'sit';
+    }
 
     if (this.now - this.lastCaughtAt > 24) this.caught = 0;
     this.applyReducedMotion(P);
@@ -281,8 +298,8 @@ export class Brain {
     this.typeI = clamp(this.typeI);
 
     // slow pointer movement = hunting crouch; fast = alert
-    const stalking = this.attn.src === 'pointer' && this.ptrActive && this.speedN < 0.12 && this.cur > 0.25 ? 1 : 0;
-    this.stalk = damp(this.stalk, stalking, stalking ? 2 : 4, dt);
+    const stalking = this.attn.src === 'pointer' && this.ptrActive && this.speedN < 0.12 && this.cur > 0.18 ? 1 : 0;
+    this.stalk = damp(this.stalk, stalking, stalking ? 3.5 : 4, dt);
   }
 
   arbitrate(dt, s) {
@@ -501,9 +518,11 @@ export class Brain {
       return;
     }
     if (st === 'DROWSY') { this.go('WAKING'); return; }
-    this.impulse({ type: 'flinch', s: ev.user ? 0.7 : 0.45 });
+    const watching = this.life.act && this.life.act.id === 'shishi' && this.life.act.phase === 'do';
+    this.impulse({ type: watching ? 'jolt' : 'flinch', s: watching ? 0.8 : ev.user ? 0.7 : 0.45 });
     this.impulse({ type: 'earFlick', side: ev.x < 800 ? 'l' : 'r' });
     this.flash = { x: ev.x, y: ev.y, until: this.now + 0.85 };
+    if (watching) this.say('lifeShishiClack', true);
   }
 
   /** Brief glance toward a sound or event, layered over any state. */
@@ -520,35 +539,67 @@ export class Brain {
   // ------------------------------------------------------------------ IDLE
   enterIDLE() {
     this.idleAct = null;
+    this.life.act = null;
+    this.life.restUntil = Math.max(this.life.restUntil, this.now + 2);
     this.nextIdleAt = randRange(this.rng, 2.2, 4.5);
     this.say('idle');
   }
 
   tickIDLE(dt, s, P) {
-    if (this.ptrActive && this.ptrBurst > 0.08) { this.go('WATCH', { from: 'idle' }); return; }
+    if (this.ptrActive && this.ptrBurst > 0.08) { this.dropLife(); this.go('WATCH', { from: 'idle' }); return; }
     const fresh = s.typing.focused && this.now - s.typing.focusAt < 3;
-    if (this.typeActive || (fresh && this.typeI > 0.24)) { this.go('WATCH', { from: 'idle' }); return; }
+    if (this.typeActive || (fresh && this.typeI > 0.24)) { this.dropLife(); this.go('WATCH', { from: 'idle' }); return; }
+    const self = s.self || { seat: 'cushion' };
     // enlightenment is exhausting
     if (this.arg.afterSatori && this.idleFor > 26 && this.stateT > 6 && !this.idleAct) { this.go('DROWSY'); return; }
-    if (!this.zenArmed && !this.arg.afterSatori && this.idleFor > 40 && !this.idleAct) { this.go('DROWSY'); return; }
-    // perfect stillness → true meditation
+    if (!this.zenArmed && !this.arg.afterSatori && this.idleFor > 40 && !this.idleAct && !this.life.act) { this.go('DROWSY'); return; }
+    // perfect stillness → go home to the cushion, then truly meditate
     if (this.zenArmed && this.idleFor > ZAZEN_AFTER && this.stateT > 1 && !s.typing.focused && !this.greet) {
-      const act = this.idleAct ? this.idleAct.name : '';
-      if (!act || ['lookAround', 'viewer', 'earTwitch', 'meditateAttempt'].includes(act)) { this.go('ZAZEN'); return; }
+      if (self.seat === 'cushion' && !self.airborne) {
+        const act = this.idleAct ? this.idleAct.name : '';
+        if (!act || ['lookAround', 'viewer', 'earTwitch', 'meditateAttempt'].includes(act)) { this.dropLife(); this.go('ZAZEN'); return; }
+      } else if (!this.life.act || !this.life.act.zen) {
+        this.life.act = { id: 'home', def: ACTIVITIES[0], phase: 'go', zen: true, t: 0, dur: 1 };
+        this.idleAct = null;
+        this.say('homeForZen', true);
+      }
     }
 
     // a returning visitor gets a hello
-    if (this.greet && this.stateT > this.greet.at && !this.idleAct) {
+    if (this.greet && this.stateT > this.greet.at && !this.idleAct && !this.life.act) {
       const g = this.greet;
       this.idleAct = this.makeAct(g.kind, { dur: g.kind === 'doodleProud' ? 2.8 : 2.4 });
       this.sayText(g.text, 'greet');
       this.greet = g.doodle ? { at: this.stateT + 2.6, kind: 'doodleProud', text: 'While you were away, Kon raked you a little something.', doodle: false } : null;
       this.lastActive = Math.max(this.lastActive, this.now - 2);
+      this.life.restUntil = this.now + 6;
     }
 
+    this.tickLife(dt, s, P);
+
+    // a falling leaf or a dragonfly is always worth a look
+    if (this.attn.src === 'object' && this.attn.sal >= 0.4) {
+      P.gaze = this.attnPoint();
+      P.headFollow = 0.75;
+      P.browL = P.browR = 0.45;
+      P.earPerk = 0.4;
+      if (P.shutL > 0.5 && P.shutR > 0.5) { P.shutR = 0.2; P.lidR = 0.3; }
+    }
+    this.applyFlash(P);
+  }
+
+  // ------------------------------------------------------------------ a life in the garden
+  dropLife(rest = randRange(this.rng, 2, 4)) {
+    this.life.act = null;
+    this.life.restUntil = this.now + rest;
+  }
+
+  /** Resting in place: the small idle behaviors (stretch, yawn, scratch, look around…). */
+  restIdle(dt, s, P) {
     if (!this.idleAct && this.stateT > this.nextIdleAt) {
       let name = this.idleBag.next(this.idleFor < 10 ? ['yawn'] : []);
       if (this.idleFor > 16 && this.rng() < 0.35) name = 'yawn';
+      if (name === 'flowerSniff' && !this.near(s, POIS.flower.stand, 150)) name = 'lookAround';
       const def = IDLE_ACTS.find(([n]) => n === name);
       this.idleAct = this.makeAct(name, { dur: def[2] });
     }
@@ -561,16 +612,135 @@ export class Brain {
     } else {
       this.idleGaze(P, s);
     }
+  }
 
-    // a falling leaf or a dragonfly is always worth a look
-    if (this.attn.src === 'object' && this.attn.sal >= 0.4) {
-      P.gaze = this.attnPoint();
-      P.headFollow = 0.75;
-      P.browL = P.browR = 0.45;
-      P.earPerk = 0.4;
-      if (P.shutL > 0.5 && P.shutR > 0.5) { P.shutR = 0.2; P.lidR = 0.3; }
+  near(s, pt, r) {
+    return !!s.self && Math.hypot(s.self.x - pt.x, s.self.y - pt.y) < r;
+  }
+
+  /** Choose somewhere to go: novelty (boredom wears off), a bit of whim, and distance. */
+  pickActivity(s) {
+    const self = s.self;
+    let best = null, bestU = -1;
+    for (const d of ACTIVITIES) {
+      if (d.id === 'home' && self.seat === 'cushion') continue;
+      if (d.id === 'rock' && self.seat === 'rock') continue;
+      const last = this.life.lastVisit[d.id] ?? -1e9;
+      const novelty = 1 - Math.exp(-(this.now - last) / 50);
+      const w = s.night && d.nightWeight ? d.nightWeight : d.weight;
+      const at = d.id === 'home' ? { x: 800, y: 870 } : d.id === 'rock' ? { x: 1079, y: 940 } : d.id === 'wander' ? { x: 800, y: 900 } : POIS[d.id].stand;
+      const dist = Math.hypot(at.x - self.x, at.y - self.y);
+      const u = w * novelty * (0.55 + this.rng() * 0.9) / (1 + dist / 1100);
+      if (u > bestU) { bestU = u; best = d; }
     }
-    this.applyFlash(P);
+    const far = best.id === 'home' ? 0 : 1;
+    return {
+      id: best.id, def: best, phase: 'go', t: 0,
+      dur: randRange(this.rng, best.dur[0], best.dur[1]),
+      gait: far && this.rng() < 0.25 ? 'trot' : 'walk',
+    };
+  }
+
+  /** Where an activity happens and how to hold position there. */
+  activityDest(a, s) {
+    const g = a.gait || 'walk';
+    if (a.id === 'home') return { move: { seat: 'cushion', gait: 'walk' }, hold: { seat: 'cushion' }, seat: 'cushion' };
+    if (a.id === 'rock') return { move: { seat: 'rock', gait: g }, hold: { seat: 'rock' }, seat: 'rock', look: POIS.rock.look };
+    if (a.id === 'wander') {
+      a.spot = a.spot || randomSpot(this.rng);
+      return { move: { to: a.spot, gait: 'walk' }, hold: null, to: a.spot };
+    }
+    if (a.id === 'leaf') {
+      const leaf = (s.objects || []).find((o) => o.id === a.leafId);
+      if (!leaf) return null;
+      return { move: { to: this.toward(leaf, s.self, 140), gait: 'trot' }, to: leaf, look: leaf, leaf };
+    }
+    const poi = POIS[a.id];
+    return { move: { to: poi.stand, gait: g, face: poi.face }, hold: { to: poi.stand, face: poi.face }, to: poi.stand, look: poi.look };
+  }
+
+  /** A point `dist` away from `from`, on the way toward `to` (on the ground). */
+  toward(to, from, dist) {
+    const dx = from.x - to.x, dy = (from.y - to.y) * 1.6;
+    const d = Math.hypot(dx, dy) || 1;
+    return pushOut({ x: to.x + (dx / d) * dist, y: to.y + (dy / d) * dist / 1.6 });
+  }
+
+  tickLife(dt, s, P) {
+    const L = this.life;
+    const self = s.self;
+    if (!self) { this.restIdle(dt, s, P); return; }
+    if (!L.act) {
+      this.restIdle(dt, s, P);
+      if (this.now > L.restUntil && !this.idleAct && !this.greet) {
+        const leaf = (s.objects || []).find((o) => o.kind === 'leafGround' && !L.leafSeen[o.id]);
+        if (leaf) {
+          L.leafSeen[leaf.id] = true;
+          if (this.rng() < 0.75) { L.act = { id: 'leaf', phase: 'go', leafId: leaf.id, t: 0 }; return; }
+        }
+        L.act = this.pickActivity(s);
+      }
+      return;
+    }
+    // a leaf just landed: that beats any casual plan (but not going home to meditate)
+    if (!L.act.zen && L.act.id !== 'leaf') {
+      const leaf = (s.objects || []).find((o) => o.kind === 'leafGround' && !L.leafSeen[o.id]);
+      if (leaf) {
+        L.leafSeen[leaf.id] = true;
+        if (this.rng() < 0.75) { L.act = { id: 'leaf', phase: 'go', leafId: leaf.id, t: 0 }; this.idleAct = null; }
+      }
+    }
+    const a = L.act;
+    a.t += dt;
+    const dest = this.activityDest(a, s);
+    if (!dest) { this.dropLife(1); return; }
+    if (a.phase === 'go') {
+      P.move = dest.move;
+      P.gaze = dest.look || null;
+      P.headFollow = 0.5;
+      if (a.id === 'leaf') {
+        if (Math.hypot(dest.leaf.x - self.x, (dest.leaf.y - self.y) * 1.6) < 175 || a.t > 6) {
+          this.go('POUNCE', { target: 'leaf', id: a.leafId, x: dest.leaf.x, y: dest.leaf.y });
+        }
+        return;
+      }
+      const arrived = dest.seat ? self.seat === dest.seat : self.arrived && Math.hypot(self.x - dest.to.x, self.y - dest.to.y) < 16;
+      if (arrived) {
+        a.phase = 'do';
+        a.t = 0;
+        this.idleAct = null;
+        if (a.def.act) {
+          a.run = this.makeAct(a.def.act, { dur: a.dur });
+          this.say(ACTS[a.def.act].caption);
+        } else if (!a.zen) {
+          this.say('lifeHome');
+        }
+      } else if (a.t > 18) {
+        this.dropLife(2); // got stuck somewhere: never mind
+      }
+      return;
+    }
+    P.move = dest.hold;
+    if (a.run) this.runAct(a.run, dt, P);
+    else this.restIdle(dt, s, P);
+    if (a.t > a.dur) {
+      L.lastVisit[a.id] = this.now;
+      this.idleAct = null;
+      this.dropLife(a.id === 'home' ? randRange(this.rng, 6, 12) : randRange(this.rng, 3, 7));
+    }
+  }
+
+  /** Where Kon goes to read over your shoulder. */
+  peekSpot(s) {
+    return s.layout === 'wide' ? { ...POIS.rack.stand, face: 1 } : { x: 800, y: 936, face: 0 };
+  }
+
+  pickPretend(exclude = []) {
+    const s = this.s;
+    const ex = [...exclude];
+    if (!this.near(s, POIS.flower.stand, 170)) ex.push('flower');
+    if (this.near(s, POIS.rack.stand, 120) && this.rng() < 0.7) return 'readPlaques';
+    return this.pretendBag.next(ex);
   }
 
   idleGaze(P, s) {
@@ -629,6 +799,32 @@ export class Brain {
     const fast = src === 'pointer' && this.ptrActive ? smoothstep(0.45, 0.95, this.speedN) : 0;
     const stalk = this.stalk;
 
+    // ---- moving about: walk over to read, creep closer, or stalk the cursor
+    const self = s.self;
+    const onGround = p.present && p.y > SAND_TOP + 14 && p.y < BOUNDS.y1 + 70;
+    const kd = self ? Math.hypot(p.x - self.x, (p.y - self.y) * 1.7) : 1e9;
+    let stalking = false;
+    if (self && src === 'typing') {
+      const spot = this.peekSpot(s);
+      P.move = { to: spot, gait: 'walk', face: spot.face, tol: 10 };
+      if (!this.arg.walkSaid && Math.hypot(self.x - spot.x, self.y - spot.y) > 90) { this.arg.walkSaid = true; this.say('typingWalk', true); }
+    } else if (self && src === 'pointer') {
+      stalking = this.stalk > 0.5 && onGround && !this.reduced;
+      if (stalking) {
+        this.stalkT += dt;
+        if (this.stalkT > 0.4 && kd > 240) P.move = { to: this.toward(p, self, 210), gait: 'sneak' };
+        if (this.stalkT > 0.8 && !this.arg.stalkSaid) { this.arg.stalkSaid = true; this.say('stalk', true); }
+      } else {
+        this.stalkT = Math.max(0, this.stalkT - dt * 1.5);
+        // curiosity pulls Kon a few steps closer to something moving on the sand
+        if (peek > 0.55 && onGround) {
+          if (kd > 430) this.approaching = true;
+          else if (kd < 330) this.approaching = false;
+          if (this.approaching) P.move = { to: this.toward(p, self, 310), gait: 'walk' };
+        } else this.approaching = false;
+      }
+    }
+
     P.gaze = target;
     P.headFollow = glancing ? 0.25 : 0.45 + 0.4 * peek - fast * 0.15;
     P.bodyFollow = glancing ? 0.12 : 0.12 + 0.88 * peek;
@@ -647,6 +843,8 @@ export class Brain {
     P.tailAmp = 0.15 + 0.45 * peek + 0.25 * fast;
     P.tailSpeed = stalk > 0.5 ? 0.35 : 0.8 + 1.2 * peek;
     if (stalk > 0.5) P.tailAmp = 0.5; // slow, tense swish of a hunter
+    if (stalking) { P.posture = 'stand'; P.crouch = Math.max(P.crouch, 0.42); P.pupil = 1.4; P.earPerk = 1; }
+    if (src === 'typing' && self && !self.moving) P.posture = 'stand';
     // a pointer that is far above makes Kon rise on tiptoe
     if (src === 'pointer' && p.y < s.body.restHead.y - 150) P.stretch = Math.min(1, P.stretch + 0.25 * peek);
 
@@ -675,6 +873,11 @@ export class Brain {
       reachY: P.reachY, stretch: P.stretch, tilt: P.tilt, crouch: P.crouch,
     };
 
+    // the cursor froze while Kon was hunting it: instinct wins over shyness
+    if (src === 'pointer' && !this.ptrActive && this.ptrStill > 0.28 && this.stalkT > 1.0 && onGround && kd < 360 && !this.reduced) {
+      this.go('POUNCE', { target: 'cursor', x: p.x, y: p.y });
+      return;
+    }
     // the visitor stopped — did they notice Kon?
     if (src === 'pointer' && !this.ptrActive && this.ptrStill > this.stopDelay && c > 0.28 && this.ptrBurst > 0.6 && !this.typeActive) {
       this.go('NOTICED', { src: 'pointer' });
@@ -712,13 +915,13 @@ export class Brain {
     P.mouthOpen = 0.12;
     P.blink = false;
     P.tailAmp = 0;
-    if (this.stateT > this.arg.dur) this.go('PRETENDING', { act: this.pretendBag.next() });
+    if (this.stateT > this.arg.dur) this.go('PRETENDING', { act: this.pickPretend() });
   }
 
   // ------------------------------------------------------------------ PRETENDING
   enterPRETENDING(arg) {
     if (!arg.continue || !this.act) {
-      this.act = this.makeAct(arg.act || this.pretendBag.next());
+      this.act = this.makeAct(arg.act || this.pickPretend());
     }
     this.arg.minT = randRange(this.rng, 1.0, 1.4);
     this.arg.dur = randRange(this.rng, 3.4, 5.2);
@@ -835,7 +1038,7 @@ export class Brain {
 
     const awaySide = target ? -Math.sign(target.x - s.body.head.x) || 1 : 1;
     if (v === 'classic') {
-      const actName = this.pretendBag.next(['fakesleep', 'sky']);
+      const actName = this.pickPretend(['fakesleep', 'sky', 'readPlaques']);
       this.go('PRETENDING', { act: actName, caption: this.arg.reason === 'return' ? 'returned' : 'classic', blush: 0.75, sweat: true });
       return;
     }
@@ -1353,14 +1556,37 @@ export class Brain {
   }
 
   // ------------------------------------------------------------------ JUDGE (a raked circle)
-  enterJUDGE() {
-    this.say('judgeLook', true);
+  enterJUDGE(arg) {
+    arg.phase = this.s && this.s.self ? 'walk' : 'judge';
+    arg.jt0 = 0;
+    this.say(arg.phase === 'walk' ? 'judgeWalk' : 'judgeLook', true);
     this.act = null;
+    this.dropLife();
   }
 
   tickJUDGE(dt, s, P) {
-    const t = this.stateT;
     const a = this.arg;
+    if (a.phase === 'walk') {
+      // walk over to inspect the circle up close
+      const self = s.self;
+      if (!a.stand) {
+        const dx = self.x - a.x, dy = (self.y - a.y) * 1.6;
+        const d = Math.hypot(dx, dy) || 1;
+        const r = a.r || 60;
+        a.stand = pushOut({ x: a.x + (dx / d) * (r * 1.15 + 60), y: a.y + ((dy / d) * (r * 0.62 + 34)) / 1.6 });
+      }
+      P.move = { to: a.stand, gait: 'walk', face: Math.sign(a.x - a.stand.x) || 1, tol: 10 };
+      P.gaze = { x: a.x, y: a.y };
+      P.headFollow = 0.6;
+      if ((self.arrived && !self.moving && Math.hypot(self.x - a.stand.x, self.y - a.stand.y) < 18) || this.stateT > 5) {
+        a.phase = 'judge';
+        a.jt0 = this.stateT;
+        this.say('judgeLook', true);
+      }
+      return;
+    }
+    if (a.stand) P.move = { to: a.stand, face: Math.sign(a.x - a.stand.x) || 1, tol: 30 };
+    const t = this.stateT - a.jt0;
     P.gaze = { x: a.x, y: a.y };
     P.headFollow = 0.9;
     P.bodyFollow = 0.35;
@@ -1405,6 +1631,93 @@ export class Brain {
       if (this.ptrActive) this.go('WATCH', { cautious: true });
       else this.go('RELAXING', { quiet: true });
     }
+  }
+
+  // ------------------------------------------------------------------ POUNCE (the fox "mousing" leap)
+  enterPOUNCE(arg) {
+    arg.phase = 'wiggle';
+    arg.key = 'pounce' + Math.round(this.now * 1000);
+    this.idleAct = null;
+    this.life.act = null;
+    this.stalkT = 0;
+    this.ptrBurst = 0;
+    this.act = null;
+    const self = this.s.self;
+    arg.from = self ? { x: self.x, y: self.y } : { x: 800, y: 880 };
+    arg.dist = Math.hypot(arg.x - arg.from.x, arg.y - arg.from.y);
+  }
+
+  tickPOUNCE(dt, s, P) {
+    const a = this.arg;
+    const self = s.self;
+    const t = this.stateT;
+    const target = { x: a.x, y: a.y };
+    P.posture = 'stand';
+    if (a.phase === 'wiggle') {
+      // crouch, lock on, wiggle the hips
+      P.move = { to: a.from, face: Math.sign(target.x - a.from.x) || 1, tol: 40 };
+      P.crouch = 0.58;
+      P.lean = Math.sin(t * 24) * 3.2;
+      P.gaze = target;
+      P.headFollow = 1;
+      P.pupil = 1.55;
+      P.eyeOpen = 1.08;
+      P.earPerk = 1;
+      P.tailAmp = 0.45;
+      P.tailSpeed = 3.2;
+      P.blink = false;
+      if (t > 0.8) {
+        a.phase = 'air';
+        this.say('pounce', true);
+        this.emit('sfx', 'boop');
+      }
+      return;
+    }
+    if (a.phase === 'air') {
+      P.move = { leap: { x: target.x, y: target.y, apex: 105 + a.dist * 0.12, key: a.key } };
+      P.gaze = target;
+      P.headFollow = 1;
+      P.eyeOpen = 1.15;
+      P.earPerk = 0.6;
+      P.ahoge = -10;
+      const u = self ? self.jumpU : 1;
+      P.pitch = 0.6 * smoothstep(0.35, 0.9, u);
+      P.stretch = 0.5;
+      P.armL = { x: target.x - 16, y: target.y, space: 'world' };
+      P.armR = { x: target.x + 16, y: target.y, space: 'world' };
+      if ((self && !self.airborne && t > 0.95) || t > 4) {
+        a.phase = 'land';
+        a.landT = t;
+        if (a.target === 'leaf') this.emit('scatterLeaf', a.id);
+      }
+      return;
+    }
+    const lt = t - a.landT;
+    if (a.target === 'leaf') {
+      // the leaf leaps away: Kon is delighted anyway
+      const leaf = (s.objects || []).find((o) => o.kind === 'leaf');
+      P.gaze = leaf ? { x: leaf.x, y: leaf.y } : this.headAway(0, -200);
+      P.headFollow = 0.9;
+      P.smile = 1;
+      P.mouthOpen = 0.35;
+      P.eyeOpen = 1.12;
+      P.sparkle = 0.6;
+      P.tailAmp = 0.8;
+      P.tailSpeed = 2.4;
+      if (lt > 0.2 && !a.said) { a.said = true; this.say('pounceLeaf', true); }
+      if (lt > 2.4) { this.life.lastVisit.leaf = this.now; this.go('RELAXING', { quiet: true }); }
+      return;
+    }
+    // the cursor: nothing under the paws
+    if (lt < 0.3) {
+      P.crouch = 0.45;
+      P.armL = { x: target.x - 16, y: target.y, space: 'world' };
+      P.armR = { x: target.x + 16, y: target.y, space: 'world' };
+      return;
+    }
+    if (!a.under) a.under = this.makeAct('lookUnder');
+    this.runAct(a.under, dt, P);
+    if (lt > 1.9) this.go('PRETENDING', { act: pick(this.rng, ['groom', 'whistle', 'sky']), caption: 'pounceMiss', blush: 0.7, sweat: true });
   }
 
   // ------------------------------------------------------------------ debug

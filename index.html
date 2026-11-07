@@ -92,6 +92,11 @@
         <stop offset=".5" stop-color="#94481a"/>
         <stop offset="1" stop-color="#3a190a"/>
       </radialGradient>
+      <radialGradient id="shadow-grad" cx="50%" cy="50%" r="50%">
+        <stop offset="0" stop-color="#3a2417" stop-opacity=".34"/>
+        <stop offset=".65" stop-color="#3a2417" stop-opacity=".18"/>
+        <stop offset="1" stop-color="#3a2417" stop-opacity="0"/>
+      </radialGradient>
       <radialGradient id="window-glow" cx="50%" cy="50%" r="50%">
         <stop offset="0" stop-color="#ffe7a3"/>
         <stop offset="1" stop-color="#f3b45a"/>
@@ -104,6 +109,8 @@
 
     <g id="world">
 
+      <!-- everything that stands on the ground, re-sorted by depth as Kon walks -->
+      <g id="depth">
       <!-- stone lantern (click to light it) -->
       <g id="lantern" class="clickable" aria-label="Stone lantern">
         <ellipse cx="330" cy="814" rx="128" ry="22" class="c-moss"/>
@@ -190,8 +197,13 @@
 
       <!-- KON — the novice fox monk. Every part is a named group the rig drives. -->
       <g id="kon" transform="translate(800 788) scale(1.15)">
-        <ellipse class="kon-shadow" cx="0" cy="2" rx="92" ry="14"/>
+        <ellipse class="kon-shadow" cx="0" cy="2" rx="96" ry="16"/>
         <g id="kon-body">
+          <g id="kon-legs">
+            <path id="kon-leg-l-ol" class="leg-ol"/><path id="kon-leg-l" class="leg-fill"/>
+            <path id="kon-leg-r-ol" class="leg-ol"/><path id="kon-leg-r" class="leg-fill"/>
+          </g>
+          <g id="kon-upper">
           <g id="kon-tail-g">
             <path id="kon-tail" class="c-fur"/>
             <path id="kon-tail-tip" class="c-cream"/>
@@ -200,10 +212,7 @@
           <g id="kon-torso">
             <path class="c-fur ink" d="M -66,-2 C -82,-22 -80,-66 -56,-92 C -42,-106 -22,-110 0,-110 C 22,-110 42,-106 56,-92 C 80,-66 82,-22 66,-2 C 44,6 -44,6 -66,-2 Z"/>
             <path class="c-fur-shade" d="M 52,-80 C 70,-58 74,-28 64,-6 C 58,-3 52,-2 48,-2 C 60,-28 60,-56 52,-80 Z"/>
-            <path class="c-cream" d="M -36,-4 C -46,-30 -40,-66 0,-78 C 40,-66 46,-30 36,-4 C 20,2 -20,2 -36,-4 Z"/>
-            <ellipse class="c-sock ink" cx="-34" cy="-7" rx="21" ry="12"/>
-            <ellipse class="c-sock ink" cx="34" cy="-7" rx="21" ry="12"/>
-            <path class="toes" d="M -42,-10 v 5 M -33,-11 v 6 M 33,-11 v 6 M 42,-10 v 5"/>
+            <path id="kon-belly" class="c-cream" d="M -36,-4 C -46,-30 -40,-66 0,-78 C 40,-66 46,-30 36,-4 C 20,2 -20,2 -36,-4 Z"/>
           </g>
           <path id="kon-neck" class="c-cream"/>
           <path id="kon-neck-ol" class="ink no-fill"/>
@@ -353,6 +362,11 @@
 
           <g id="kon-arm-l" class="arm"><path class="arm-ol"/><path class="arm-fur"/><path class="arm-sock"/><ellipse class="paw" rx="10.5" ry="9"/></g>
           <g id="kon-arm-r" class="arm"><path class="arm-ol"/><path class="arm-fur"/><path class="arm-sock"/><ellipse class="paw" rx="10.5" ry="9"/></g>
+          </g>
+          <g id="kon-feet">
+            <g id="kon-foot-l"><ellipse class="c-sock ink" rx="21" ry="12"/><path class="toes" d="M -8,-3 v 5 M 1,-4 v 6"/></g>
+            <g id="kon-foot-r"><ellipse class="c-sock ink" rx="21" ry="12"/><path class="toes" d="M -1,-4 v 6 M 8,-3 v 5"/></g>
+          </g>
         </g>
         <g id="kon-fx"></g>
       </g>
@@ -379,6 +393,8 @@
         </g>
         <rect x="566" y="858" width="11" height="84" rx="3" class="c-bamboo ink-thin"/>
         <g id="water-fx"></g>
+      </g>
+
       </g>
 
       <g id="leaves-fx"></g>
@@ -478,6 +494,8 @@
       <li>Write a wish on the plaque, then pause.</li>
       <li>Be <em>perfectly still</em>. Kon will try to make you flinch.</li>
       <li>Drag across the sand to rake it. Draw a circle for Kon to judge.</li>
+      <li>Move the cursor <em>slowly</em> along the sand, then freeze. Foxes hunt.</li>
+      <li>Do nothing for a while and watch where Kon goes.</li>
       <li>Boop the nose. Pet the head. Circle Kon, quickly.</li>
       <li>Light the lantern. Shake the maple. Tap the bamboo.</li>
       <li>Come back tomorrow. Kon notices.</li>

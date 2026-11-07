@@ -19,6 +19,8 @@ import { makeRng } from './math.js';
 import { runDemo } from './demo.js';
 import { arrive, touch, saveMemory } from './memory.js';
 import { DOODLE_KINDS } from './rake.js';
+import { Mover } from './mover.js';
+import { depthScale } from './world.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');
@@ -28,7 +30,8 @@ const captionEl = $('caption');
 const params = new URLSearchParams(location.search);
 const reducedMQ = matchMedia('(prefers-reduced-motion: reduce)');
 const coarseMQ = matchMedia('(pointer: coarse)');
-const reduced = () => reducedMQ.matches || params.has('reduced');
+// ?motion=full shows every movement even when the system asks for reduced motion
+const reduced = () => params.get('motion') !== 'full' && (reducedMQ.matches || params.has('reduced'));
 const demo = params.get('demo');
 const manual = params.has('manual') || !!demo;
 // scripted checks use repeatable randomness
@@ -62,6 +65,7 @@ input = new InputTracker({
 });
 
 const rig = new FoxRig($('kon'), { reducedMotion: reduced(), rng: rngFor(1) });
+const mover = new Mover({ seat: 'cushion' });
 const brain = new Brain({ reducedMotion: reduced(), rng: rngFor(2) });
 
 reducedMQ.addEventListener?.('change', () => {
@@ -204,19 +208,32 @@ function tick(dt, ts) {
       if (coarseMQ.matches) wishInput.blur();
     }
   }
+  senses.self = mover.state();
   senses.body = rig.measure();
   senses.objects = scene.objects();
   senses.places = scene.places;
+  senses.night = scene.night;
+  senses.layout = scene.mode;
 
   const pose = brain.update(dt, senses);
+  // the body follows the brain's wishes, with momentum and gravity
+  mover.command(pose.move);
+  for (const ev of mover.update(dt)) {
+    if (ev.type === 'step') scene.rake.pawPrint(ev.x, ev.y, ev.foot, ev.dir, depthScale(ev.y));
+    else if (ev.type === 'land') { pose.impulses.push({ type: 'land', s: ev.impact }); if (ev.kind === 'pounce') sound.play('clack', 0.4); }
+  }
+  const where = mover.state();
   for (const em of brain.emits) {
     if (em.type === 'sfx') sound.play(em.data);
     else if (em.type === 'dragonfly') scene.spawnDragonfly();
     else if (em.type === 'poke') scene.pokeFlower(1);
     else if (em.type === 'satori') { memory.satori = em.data; if (!manual) saveMemory(memory); }
     else if (em.type === 'ensoScore') { memory.bestEnso = Math.max(memory.bestEnso || 0, em.data); if (!manual) saveMemory(memory); }
+    else if (em.type === 'scatterLeaf') scene.scatterLeaf(em.data);
+    else if (em.type === 'snailPoke') scene.hideSnail();
   }
-  rig.update(dt, pose);
+  rig.update(dt, pose, where);
+  scene.placeKon(where);
   scene.update(dt);
   const body = rig.measure();
   scene.zen.update(dt, brain.zenInfo(), body.center);
@@ -237,7 +254,7 @@ function tick(dt, ts) {
   }
 }
 
-const zen = { brain, rig, scene, input, sound };
+const zen = { brain, rig, scene, input, sound, mover };
 
 if (manual) {
   // Test mode: time only moves when a script calls __zen.advance(seconds, fn).
@@ -270,5 +287,5 @@ window.__zen = zen;
 
 if (demo) {
   const t = params.get('t');
-  runDemo(zen, demo, { act: params.get('act'), t: t ? +t : undefined });
+  runDemo(zen, demo, { ...Object.fromEntries(params), act: params.get('act'), t: t ? +t : undefined });
 }

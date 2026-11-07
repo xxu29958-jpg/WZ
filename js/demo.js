@@ -4,6 +4,8 @@
 // freezes on the moment worth looking at. A small drawn cursor shows where
 // the "mouse" is, since screenshots don't include the real one.
 
+import { ACTIVITIES } from './acts.js';
+
 export function runDemo(zen, name, opts = {}) {
   const app = document.getElementById('app');
   const input = document.getElementById('wish-input');
@@ -61,6 +63,13 @@ export function runDemo(zen, name, opts = {}) {
     const orig = bag.next.bind(bag);
     bag.next = () => { bag.next = orig; return act; };
   };
+  // send Kon somewhere on its own (no meditation interrupting the walk)
+  const goDo = (id, extra = {}) => {
+    brain.zenArmed = false;
+    const def = ACTIVITIES.find((d) => d.id === id) || ACTIVITIES[0];
+    brain.life.restUntil = 0;
+    brain.life.act = { id, def, phase: 'go', t: 0, dur: 30, gait: opts.gait || 'walk', ...extra };
+  };
   const pretend = (act) => {
     forceAct(act);
     sweep(3.4);
@@ -117,7 +126,7 @@ export function runDemo(zen, name, opts = {}) {
       focusInput();
       input.value = 'may the moss grow slowly';
       adv(0.4);
-      typeFor(2.6);
+      typeFor(opts.t ?? 7);
       break;
     case 'typing-stop':
       cursor.hidden = true;
@@ -211,6 +220,32 @@ export function runDemo(zen, name, opts = {}) {
       cursor.hidden = true;
       adv(opts.t ?? 4.4);
       break;
+    case 'go': {
+      // walk to an activity (?to=basin) or a spot (?x=&y=), frozen after t seconds
+      cursor.hidden = true;
+      if (opts.x) goDo('wander', { spot: { x: +opts.x, y: +opts.y } });
+      else goDo(opts.to || 'basin');
+      adv(opts.t ?? 2.2);
+      break;
+    }
+    case 'at': {
+      cursor.hidden = true;
+      goDo(opts.to || 'basin');
+      until(() => brain.life.act && brain.life.act.phase === 'do', 30);
+      adv(opts.t ?? 1.6);
+      break;
+    }
+    case 'stalk2':
+    case 'pounce': {
+      adv(4);
+      let x = H.x + (opts.from ? +opts.from : 560);
+      const y = scene.toScreen(0, 905).y;
+      adv(opts.dur ? +opts.dur : 4, () => { x -= 1.2; move(x, y); });
+      if (name === 'pounce') {
+        until(() => brain.state === 'POUNCE' && brain.arg.phase === 'air' && zen.mover.state().jumpU > (opts.t ?? 0.45), 6);
+      }
+      break;
+    }
     case 'night':
       cursor.hidden = true;
       scene.toggleNight(true);

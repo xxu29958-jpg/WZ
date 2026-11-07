@@ -178,7 +178,7 @@ html, body {
 .leaf-vein { fill: none; stroke: rgba(58,36,23,.35); stroke-width: 1; }
 
 /* Kon */
-.kon-shadow { fill: #1f2546; opacity: .26; }
+.kon-shadow { fill: url(#shadow-grad); }
 .toes { fill: none; stroke: #7b5644; stroke-width: 2; stroke-linecap: round; }
 .ear-fluff { fill: none; stroke: #fff4e2; stroke-width: 2; stroke-linecap: round; opacity: .9; }
 .bib-trim { fill: none; stroke: #ffd3c4; stroke-width: 2; stroke-dasharray: 2 5; stroke-linecap: round; }
@@ -539,10 +539,9 @@ html, body {
 /* raked grooves */
 #sand-canvas {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  left: 0; top: 0;
   pointer-events: none;
+  transform-origin: 0 0;
 }
 
 /* the ensō fades back while a new one is painted live */
@@ -633,3 +632,8 @@ html, body {
   .satori-seal.stamp { animation-duration: .01s; }
   #enso-live, #enso, #tint { transition-duration: .3s; }
 }
+
+/* legs (visible when Kon stands up) */
+.leg-ol { fill: none; stroke: var(--ink); stroke-width: 17; stroke-linecap: round; }
+.leg-fill { fill: none; stroke: var(--sock); stroke-width: 11; stroke-linecap: round; }
+.paw-print { fill: rgba(176, 150, 108, .55); }

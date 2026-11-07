@@ -1,10 +1,10 @@
-# ZEN70 · 禅道 — first prototype
+# ZEN70 · 禅道
 
-A small zen garden. Its resident is **Kon**, a novice kitsune monk in a red Inari bib. Kon is supposed to be meditating, but is very bad at it.
+A small zen garden, and the fox who lives in it. **Kon** is a novice kitsune monk in a red Inari bib. Kon is supposed to be meditating, but is very bad at it.
 
-Kon secretly watches your cursor and your typing. When you stop, Kon realizes you noticed and pretends to have been doing something else entirely.
+Kon has a life of its own. It wanders the garden: sniffing the flower, drinking at the basin, bothering the snail, sunbathing on the warm rock, and jumping every time the bamboo clacks. It also secretly watches you. When you notice, it pretends it was doing something else entirely.
 
-![Kon's behaviors](docs/screenshots/overview.jpg)
+![Kon living in the garden](docs/screenshots/world.jpg)
 
 ## Run it
 
@@ -21,82 +21,118 @@ Useful URLs:
 | URL | What it is |
 | --- | --- |
 | `/` | the garden |
-| `/?debug` | live overlay: state, act, attention source, curiosity values |
+| `/?debug` | live overlay: state, activity, attention, curiosity, meditation progress |
+| `/?motion=full` | every movement, even if your system asks for reduced motion |
 | `/?reduced` | force reduced-motion behavior |
-| `/tests/` | 22 behavior tests (simulated input, deterministic) |
-| `/?demo=peek` | scripted demo frozen on one moment (see below) |
+| `/?hour=21` | pretend it's 9 pm (the garden follows your local time) |
+| `/tests/` | 40 behavior tests (simulated input, deterministic) |
+| `/?demo=pounce` | a scripted moment, frozen for a screenshot (see below) |
 
 Fonts come from Google Fonts (Fraunces, Kalam, Ma Shan Zheng). Offline, the page falls back to system fonts.
 
+**Reduced motion:** if your operating system asks for reduced motion, Kon tones down big movements. The pounce leap, the dizzy spin and floating hearts are skipped, and leaning and stretching shrink to about a third. Add `?motion=full` to see everything.
+
 ## Things to try
 
-- Move the mouse for a while. Kon's eyes, head and body follow, each with its own lag. Over time Kon gets curious, tilts its head, stretches its neck and rises on tiptoe.
-- **Stop.** Kon freezes ("uh-oh"), withdraws, looks away and plays an innocence act: meditating (with one eye sneaking open), whistling, grooming, examining the flower, studying the sky or fake-sleeping. Move again and Kon side-eyes you before giving up the act. Freeze during the side-eye and Kon snaps straight back into the act.
-- **Move slowly** and Kon crouches like a hunting fox, pupils wide. **Move fast** and Kon goes alert with wide eyes.
-- **Rush the cursor at Kon** to catch Kon peeking. Repeat it: the reaction escalates from startled, to hiding behind paws (and peeking through them), to a pout with crossed arms, to sticking out its tongue.
-- **Click the wish plaque and type.** Kon leans over to read and its eyes follow the line. Stop typing and Kon pretends it wasn't reading. Press Enter and the wish folds into a paper crane and flies off. Kon swears it didn't read it.
-- Boop the nose (Kon sneezes). Rub the head back and forth (Kon permits this, then denies it happened). Circle Kon quickly (spiral eyes).
-- Light the stone lantern (night, fireflies). Shake the maple. Tap the bamboo deer-scarer. Poke the snail.
-- Do nothing: Kon blinks, breathes, yawns, scratches an ear, adjusts the bib, admires the flower, and eventually falls asleep with a snot bubble.
-- Switch tabs and come back.
+**Kon's life**
+- Do nothing and watch. Kon sits a while, then picks somewhere to go, based on what it hasn't visited lately. It walks there with momentum and hops on and off the cushion and rock. It shrinks as it walks toward the wall and passes behind the lantern. Its paws leave prints in the sand.
+- Shake the maple. When a leaf lands, Kon trots over and pounces on it.
+- At night (light the lantern, or visit after 7 pm) Kon warms its paws at the lantern, and your cursor becomes a firefly.
 
-Nothing typed is read or stored: Kon only receives "an input happened" events (see `js/input.js`).
+**Secretly watching you**
+- Move the mouse for a while. Kon's eyes, head and body follow, each with its own lag. It gets curious, tilts its head, stretches its neck, and may walk a few steps closer to see.
+- **Stop.** Kon freezes ("uh-oh"), plops down and plays an innocence act. Move again and Kon side-eyes you before giving up the act. Freeze during the side-eye and Kon snaps straight back into it.
+- **Move slowly along the sand, then freeze.** Foxes hunt: Kon crouches, sneaks closer, wiggles, and pounces on the cursor in a high arc. It finds nothing and claims it was only stretching.
+- **Rush the cursor at Kon** to catch it peeking. Repeated catches escalate: startled, then hiding behind its paws (peeking through), then a pout with crossed arms, then sticking out its tongue.
+- **Click the wish plaque and type.** Kon walks over and stands on tiptoe to read over your shoulder. Stop typing and it pretends to be reading the other wishes. Press Enter and your wish folds into a paper crane and flies off.
+
+**Stillness**
+- **Be perfectly still.** Kon walks home to the cushion and checks whether you're really gone: it waves, pulls faces, plays peekaboo, dances. Flinch, and Kon gloats. Hold out, and a spirit brush paints the big ensō stroke by stroke while Kon truly meditates. Any movement and the ink evaporates. At the end comes satori: Kon floats, the ensō turns gold, and a 悟 seal is stamped (the seal counts your satori). Then Kon drops.
+
+**The sand**
+- **Drag across the sand** to rake it. The grooves slowly smooth themselves away. Rake a circle and Kon walks over to judge it with a score card. Rake a spiral and Kon gets dizzy following it.
+
+**Everything else**
+- Boop the nose (Kon sneezes). Rub the head back and forth. Circle Kon quickly (spiral eyes). Tap the bamboo, poke the snail.
+- Come back later. Kon greets returning visitors, and after a long absence it has raked a doodle in the sand for you.
+
+Nothing typed is read or stored: Kon only receives "an input happened" events (see `js/input.js`). Kon's memory of you (visit count, satori count) stays in this browser's local storage.
 
 ## How it's built
 
-Plain ES modules, hand-drawn SVG and one `requestAnimationFrame` loop. There's no framework.
+Plain ES modules, hand-drawn SVG, canvas for ink and sand, and one `requestAnimationFrame` loop. There's no framework.
 
 ```
-InputTracker (js/input.js)   raw DOM events → a "senses" snapshot (pointer, typing, events)
+InputTracker (js/input.js)   raw DOM events → "senses" (pointer, typing, events)
       ↓
-Brain        (js/brain.js)   senses → pose: what Kon wants to do (pure logic, no DOM)
-  └ Acts     (js/acts.js)    authored performances: innocence acts and idle behaviors
+Brain        (js/brain.js)   senses → intent: a pose, plus where Kon wants to be
+  ├ Acts     (js/acts.js)    authored performances: innocence acts, idle and life activities
+  └ World    (js/world.js)   the ground: perspective, obstacles, platforms, places, paths
       ↓
-FoxRig       (js/rig.js)     pose → ~60 springs → SVG transforms and paths
-Scene        (js/scene.js)   layout per screen shape, garden props, events for the brain
+Mover        (js/mover.js)   intent → motion: gaits, momentum, path following, jumps, footfalls
+      ↓
+FoxRig       (js/rig.js)     pose + motion → ~65 springs → SVG (legs, walk cycle, facing, tail)
+Scene        (js/scene.js)   camera, parallax, depth sorting, garden props
+  ├ SandRake (js/rake.js)    raked grooves, paw prints, circle judging
+  └ ZenFX    (js/zen.js)     the live ensō, spirit brush, aura and seal
 ```
 
-- **Different delays for eyes, head and body.** Every rig channel is a damped spring with its own frequency: eyes about 9 Hz, head about 3 Hz, body about 1.6 Hz. While the head catches up, the eyes lead and then re-center, much like real eyes. Ears, the ahoge tuft, the bib bell and the tail wave take their motion from the primary channels' velocities.
-- **Believable eyes.** Each eye computes its own direction, so a close cursor makes Kon go slightly cross-eyed. The iris stays inside an ellipse limit. Blinks happen randomly and also on big gaze shifts, along with small micro-saccades.
-- **State machine.** `IDLE → WATCH (OBSERVING → CURIOUS → PEEKING) → NOTICED → PRETENDING → RESUMING → WATCH`, plus `STARTLED`, `RELAXING`, `DROWSY → SLEEPING → WAKING` and the easter-egg states `DIZZY`, `PETTED`, `BOOPED`, `ADMIRE`. The WATCH sub-labels come from one continuous curiosity value, so the posture blends instead of switching.
-- **Two independent input sources.** Pointer and typing each keep their own interest and activity timers. A small attention arbiter (with hysteresis) decides what Kon looks at. Typing while moving the mouse gives brief glances at the cursor, not flicker. A pause in one source while the other is active hands attention over instead of faking innocence.
-- **Pretend acts don't end on their own.** The brain decides how long to hold them, which is what lets Kon peek *out of* an act and snap back into it.
-- **Responsive framing.** The world is 1600×1000 design units, extended past its edges. `Scene.layout()` picks a viewBox per screen shape: wide, tall (phone), or compact (phone keyboard open). It then positions the HTML plaque and caption on matching world points.
-- **Reduced motion.** Lean, neck stretch, tilt and hops drop to about 35%, springs stop overshooting, and the dizzy spin and floating hearts are skipped.
+- **A ground with perspective.** Every point on the ground has a depth scale. Kon is 1.15× at the cushion, about 0.9× near the wall, and about 1.5× right in front of you. Moving toward or away from the viewer covers fewer screen units than moving sideways. The scenery is sorted by where it meets the ground, and Kon is re-inserted among it as it walks, so it passes behind the lantern and in front of the rock.
+- **A body with momentum.** The brain only says where it wants to be. The mover accelerates with limited force, slows down on arrival, and walks around obstacles (a tiny planner: detours around ellipses, replanning when stuck). It hops onto the cushion and rock and flies ballistic arcs for pounces. Footfalls drive paw prints in the sand; landings squash the rig.
+- **A rig that walks.** Kon's upper body rises on short legs when it stands. The feet step in a walk cycle (bigger bounce when trotting), the arms swing, the body leans into the turn, the belly and bib shift to suggest a three-quarter view, and the tail swings over to trail behind.
+- **A camera.** On wide screens it pans gently with Kon. On phones it follows Kon around the garden. Hills, trees and the wall move at different rates, which gives the parallax depth.
+- **Different delays for eyes, head and body.** Each rig channel is a damped spring with its own frequency: eyes about 9 Hz, head about 3 Hz, body about 1.6 Hz. Ears, the tuft, the bib bell and the tail take their motion from those.
+- **Two layers of behavior.** A *life* layer chooses activities by novelty, whim and distance whenever nobody's around. A *social* layer reacts to you (watch, peek, pretend, startle, stalk, read, judge) and always wins. The state machine: `IDLE (life) → WATCH → NOTICED → PRETENDING → RESUMING`, plus `STARTLED`, `POUNCE`, `JUDGE`, `ZAZEN → SATORI`, `DROWSY → SLEEPING → WAKING`, `GOTCHA`, `DIZZY`, `PETTED`, `BOOPED`, `ADMIRE`.
 
 ## Verification
 
-- **`/tests/`**: 22 scenario tests drive the real `Brain` with simulated pointer and typing input on a seeded random generator. They cover tracking, slow vs fast movement, stop → noticed → pretend, resume, snap-back, act variety across six cycles, rapid start/stop (no reaction spam), escalating startle variants with no re-trigger while the cursor stays near, focus and typing peeks, typing pause while the mouse moves (and the reverse), glances while doing both, repeated focus/blur, sleep and wake, dizzy, petting, boop, wish submission, and a 60-step random session with NaN checks. **22/22 pass.**
-- **`/?demo=<name>`**: runs a scripted input sequence through the real InputTracker → Brain → Rig pipeline on a virtual clock and freezes on one moment. A drawn cursor shows where the "mouse" is. Names: `idle peek peek-low stalk noticed pretend resume startle cover pout bleh typing typing-stop both sleep dizzy pet boop admire night`. Optional: `&act=whistle|meditate|groom|flower|sky|fakesleep`, `&t=<seconds>`.
-- **`tests/screenshots.sh`** captures all of the above at desktop (1440×900) and phone (390×844) size with headless Firefox into `docs/screenshots/`.
-- **Performance**: script work is about 0.5 ms per frame while Kon watches and about 0.15 ms at rest (measured in the virtual-clock mode). That excludes the browser's own paint time. The scenery sits on its own static layers.
+- **`/tests/`**: 40 scenario tests drive the real `Brain` *and* `Mover` with simulated input on a seeded random generator. Highlights:
+  - tracking, stop → pretend, resume, snap-back, act variety, escalating startles;
+  - typing and mouse as independent sources;
+  - the stillness game (temptation, gotcha, breaking and restarting, jitter tolerance, satori), and stroke analysis (circles, ovals, spirals);
+  - the world: Kon wanders when left alone and goes home to meditate; walking between every pair of places never enters scenery; hopping on and off the cushion; momentum; walking over to read; stalk → pounce → miss; pouncing on a leaf; walking over to judge a circle;
+  - a 60-step random session with NaN checks.
+
+  **40/40 pass.**
+- **`/?demo=<name>`**: runs a scripted input sequence through the real pipeline on a virtual clock and freezes on one moment. A drawn cursor shows where the "mouse" is. Examples: `go&to=basin&t=2.4`, `at&to=rock`, `go&x=300&y=760&t=14` (behind the lantern), `stalk2`, `pounce`, `typing`, `judge&t=5.2`, `zazen&t=0.6`, `satori`, `tempt`, `gotcha`, `doodle&visits=3&away=5`, `night`, and the older `peek`, `noticed`, `pretend&act=whistle`, `resume`, `startle`, `cover`, `pout`, `bleh`, `sleep`, `dizzy`, `pet`, `boop`, `admire`.
+- **`PORT=8070 tests/screenshots.sh`** captures 41 of them at desktop (1440×900) and phone (390×844) size with headless Firefox into `docs/screenshots/`.
+- **Performance**: script work is about 0.3–0.5 ms per frame, measured in the virtual-clock mode. That excludes the browser's own paint time. Static scenery sits on its own layers, and the sand canvas pans with a CSS transform instead of being redrawn.
+
+![The stillness game](docs/screenshots/stillness.jpg)
+
+![Reactions to you](docs/screenshots/overview.jpg)
 
 ![Mobile](docs/screenshots/mobile-overview.jpg)
 
 ## Known limitations
 
-- **Live 60 fps feel was not watched in real time.** The in-app browser pane was hidden during development, which throttles animation frames. Motion was verified frame by frame on the virtual clock and with screenshots, not by watching it live. Fine timing (spring stiffness, act durations) may want a tuning pass once you've played with it.
-- **Not tested on real phones.** Touch input and the on-screen keyboard layout were checked only with emulated viewports. iOS Safari and Android Chrome may need small adjustments.
-- **Kon's eyes follow an estimate of the caret**, based on how many input events happened, not the real caret. Edits in the middle of the text or long text won't line up exactly.
-- **Petting** needs the cursor over Kon's head. The first approach always startles Kon, so petting works from the second approach on (by design, but not obvious).
-- **The dragonfly** only appears during the "studying the sky" act or about once every one to two minutes.
+- **Live 60 fps feel was not watched in real time.** The in-app browser pane was hidden during development, which pauses animation frames. Motion was verified frame by frame on the virtual clock and with screenshots, not live. Walking speed, spring stiffness and act timing may want a tuning pass once you've played with it.
+- **Not tested on real phones.** Touch input, the following camera and the on-screen keyboard layout were checked only with emulated viewports.
+- **No back view.** Kon always shows its face. When walking straight away from you it turns to a three-quarter view instead of showing its back.
+- **The wish plaque is an HTML form on top of the garden,** so it always draws in front of Kon. Kon's reading spot sits just beside it to avoid overlapping.
+- **Falling leaves draw in front of everything**, even when they land behind Kon.
+- **Kon's eyes follow an estimate of the caret**, based on how many input events happened, not the real caret.
 - **Sound** is a few basic synthesized effects, off by default.
-- **Some browsers block canvas-to-image export.** The ensō and paper grain are therefore drawn directly onto canvases rather than exported as images.
-- `js/demo.js` (verification helpers, ~8 KB) ships with the page. Drop it before production.
-- Kon can't be booped or petted from the keyboard. The lantern, bamboo and maple can (Tab, then Enter).
+- `js/demo.js` (verification helpers) ships with the page. Drop it before production.
 
 ## Files
 
 ```
 index.html          the scene (SVG art for the garden and Kon), plaque, controls
-css/style.css       palette, paint classes, layout, night mode
+css/style.css       palette, paint classes, layout, night/dusk, effects
 js/main.js          wiring and the animation loop
 js/input.js         pointer + typing tracker (no text is read)
-js/brain.js         behavior state machine
-js/acts.js          innocence acts and idle behaviors
+js/brain.js         behavior: life layer + social layer + state machine
+js/acts.js          innocence acts, idle behaviors, life activities, temptations
+js/world.js         ground, perspective, obstacles, platforms, places, path planning
+js/mover.js         locomotion: gaits, momentum, jumps, footfalls
+js/rig.js           springs → SVG: face, body, legs, walk cycle, tail, effects
+js/scene.js         camera, parallax, depth sorting, layout, garden props
+js/rake.js          raking, paw prints, stroke analysis, doodles
+js/zen.js           live ensō, spirit brush, aura, satori seal
+js/enso.js          the procedural sumi brush
+js/memory.js        what Kon remembers about you (localStorage)
 js/captions.js      the narrator's lines
-js/rig.js           springs → SVG; effects (notes, z's, hearts, sneeze puffs)
-js/scene.js         layout, generated art (ensō, sand, hills, maple), garden props
 js/audio.js         tiny Web Audio synth
 js/math.js          springs, easing, seeded random, shuffle bag, splines
 js/clock.js         real or virtual clock

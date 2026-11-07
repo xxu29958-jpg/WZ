@@ -5,6 +5,8 @@ import { Brain } from '../js/brain.js';
 import { makeRng } from '../js/math.js';
 import { PLACES } from '../js/scene.js';
 import { analyzeStroke } from '../js/rake.js';
+import { Mover } from '../js/mover.js';
+import { bodyAt, isFree, planPath, POIS, OBSTACLES } from '../js/world.js';
 import { TAU } from '../js/math.js';
 
 const HEAD = { x: 800, y: 612 };
@@ -29,20 +31,34 @@ class Sim {
     this.events = [];
     this.states = [];
     this.bad = [];
+    this.mover = new Mover({ seat: 'cushion' });
+    this.objects = [];
+    this.layout = 'wide';
+    this.track = [];
   }
+  get self() { return this.mover.state(); }
+  get head() { const k = this.self; return bodyAt(k.x, k.y, k.h).head; }
   step() {
     const p = this.ptr;
     if (this.t - p.lastMove > 0.05) { p.vx *= 0.85; p.vy *= 0.85; }
+    const self = this.mover.state();
     const s = {
       now: this.t,
       pointer: { ...p, speed: Math.hypot(p.vx, p.vy) },
       typing: { ...this.typing, anchor: PLAQUE },
       events: this.events.splice(0),
-      body: BODY,
-      objects: [],
+      self,
+      body: bodyAt(self.x, self.y, self.h),
+      objects: this.objects,
       places: PLACES,
+      night: false,
+      layout: this.layout,
     };
     const P = this.brain.update(DT, s);
+    this.mover.command(P.move);
+    this.mover.update(DT);
+    const k = this.mover.state();
+    if (!k.seat && !k.airborne) this.track.push({ x: k.x, y: k.y });
     for (const [k, v] of Object.entries(P)) {
       if (typeof v === 'number' && !Number.isFinite(v)) this.bad.push(`${k}=${v} @${this.t.toFixed(2)} in ${this.brain.state}`);
     }
@@ -95,12 +111,15 @@ class Sim {
     });
   }
   /** fly the cursor straight at Kon from a far point */
-  approach(from = { x: 1350, y: 615 }, speed = 1500) {
+  approach(from = null, speed = 1500) {
+    const h0 = this.head;
+    from = from || { x: h0.x + 550, y: h0.y };
     this.moveTo(from.x, from.y);
     this.step();
     let x = from.x, y = from.y;
     for (let i = 0; i < 120; i++) {
-      const dx = HEAD.x - x, dy = HEAD.y - y;
+      const H = this.head;
+      const dx = H.x - x, dy = H.y - y;
       const d = Math.hypot(dx, dy);
       if (d < 30 || this.brain.state === 'STARTLED') break;
       x += (dx / d) * speed * DT;
@@ -419,9 +438,9 @@ test('moving while the ensō paints breaks it; staying still again restarts it',
   const paint = sim.brain.zen.paint;
   sim.sweep(0.5);
   const broke = sim.brain.state === 'WATCH' && sim.brain.caption.key === 'zazenBroken';
-  sim.still(10);
+  stillUntil(sim, () => sim.brain.state === 'ZAZEN', 25);
   const again = sim.brain.state === 'ZAZEN';
-  return { ok: broke && again, info: `broke at ${(paint * 100).toFixed(0)}% → ${broke ? 'WATCH/zazenBroken' : sim.brain.state}; 10 s later: ${sim.brain.state}` };
+  return { ok: broke && again, info: `broke at ${(paint * 100).toFixed(0)}% → ${broke ? 'WATCH/zazenBroken' : sim.brain.state}; staying still again: ${sim.brain.state}` };
 });
 
 test('a tiny jitter (a few pixels) does not break meditation', (sim) => {
@@ -475,7 +494,7 @@ test('a raked circle → JUDGE holding up a score card; a spiral → DIZZY', (si
   sim.still(0.1);
   sim.events.push({ type: 'rakeEnd', shape: 'circle', score: 7, x: 900, y: 950, r: 80 });
   let sign = null;
-  sim.run(2.2, null, (P) => { if (P.sign !== null) sign = P.sign; });
+  sim.run(7, null, (P) => { if (P.sign !== null) sign = P.sign; });
   const judged = sim.states.includes('JUDGE') && sign === 7;
   sim.still(3);
   sim.events.push({ type: 'rakeEnd', shape: 'spiral', x: 900, y: 950 });
@@ -501,6 +520,99 @@ test('a returning visitor is greeted (and shown the doodle after a long absence)
   });
   const ok = seen[0] === 'greetWave' && seen.includes('doodleProud');
   return { ok, info: `idle acts: ${seen.join(', ')}; caption key=${sim.brain.caption.key}` };
+});
+
+// ---------------------------------------------------------------- a body in the world
+const away = (sim) => Math.hypot(sim.self.x - 800, sim.self.y - 826);
+
+test('left alone, Kon gets up and goes somewhere (then home to meditate)', (sim) => {
+  let maxAway = 0, visited = new Set();
+  sim.run(40, null, () => {
+    maxAway = Math.max(maxAway, away(sim));
+    const a = sim.brain.life.act;
+    if (a && a.phase === 'do') visited.add(a.id);
+  });
+  const zenSeat = sim.brain.history.find((h) => h.to === 'ZAZEN') ? 'cushion' : '?';
+  const ok = maxAway > 70 && visited.size >= 1 && sim.states.includes('ZAZEN');
+  return { ok, info: `went ${maxAway.toFixed(0)} units from the cushion; did: ${[...visited].join(', ') || 'nothing'}; states: ${sim.states.join(' → ')}` };
+});
+
+test('walking never passes through scenery', (sim) => {
+  const m = new Mover({ seat: null, x: POIS.basin.stand.x, y: POIS.basin.stand.y });
+  const legs = [POIS.rack.stand, POIS.snail.stand, POIS.shishi.stand, POIS.maple.stand, POIS.flower.stand, POIS.basin.stand];
+  let bad = 0, frames = 0, reached = 0;
+  for (const goal of legs) {
+    for (let i = 0; i < 60 * 25; i++) {
+      m.command({ to: goal, gait: 'walk' });
+      m.update(DT);
+      frames++;
+      if (!isFree(m.state(), null)) bad++;
+      if (m.state().arrived && Math.hypot(m.x - goal.x, m.y - goal.y) < 10) { reached++; break; }
+    }
+  }
+  return { ok: bad === 0 && reached === legs.length, info: `reached ${reached}/${legs.length} spots in ${(frames / 60).toFixed(1)} s; frames inside an obstacle: ${bad}` };
+});
+
+test('hops down from the cushion to walk, and back up to sit', (sim) => {
+  const m = new Mover({ seat: 'cushion' });
+  const kinds = [];
+  for (let i = 0; i < 60 * 12; i++) {
+    m.command({ to: { x: 1000, y: 930 }, gait: 'walk' });
+    for (const ev of m.update(DT)) if (ev.type === 'takeoff') kinds.push(ev.kind);
+  }
+  const walked = !m.seat && Math.hypot(m.x - 1000, m.y - 930) < 12;
+  for (let i = 0; i < 60 * 12; i++) {
+    m.command({ seat: 'cushion' });
+    for (const ev of m.update(DT)) if (ev.type === 'takeoff') kinds.push(ev.kind);
+  }
+  return { ok: walked && m.seat === 'cushion' && kinds.join() === 'hopDown,hopUp', info: `jumps: ${kinds.join(', ')}; seat=${m.seat}` };
+});
+
+test('momentum: Kon speeds up and slows down instead of jumping to full speed', (sim) => {
+  const m = new Mover({ seat: null, x: 300, y: 900 });
+  const speeds = [];
+  for (let i = 0; i < 60 * 10; i++) {
+    m.command({ to: { x: 1000, y: 900 }, gait: 'walk' });
+    m.update(DT);
+    speeds.push(m.state().speed);
+  }
+  const first = speeds[2], peak = Math.max(...speeds), last = speeds[speeds.length - 1];
+  return { ok: first < peak * 0.3 && peak > 80 && last < 5, info: `speed after 3 frames ${first.toFixed(0)}, peak ${peak.toFixed(0)}, at the end ${last.toFixed(1)}` };
+});
+
+test('typing → Kon walks over to the plaque to read', (sim) => {
+  sim.still(0.5);
+  sim.focus();
+  sim.type(7);
+  const d = Math.hypot(sim.self.x - POIS.rack.stand.x, sim.self.y - POIS.rack.stand.y);
+  return { ok: d < 25 && sim.brain.attn.src === 'typing', info: `${d.toFixed(0)} units from the reading spot; state=${sim.brain.state}` };
+});
+
+test('slow cursor on the sand → Kon stalks it; cursor stops → POUNCE → nothing there → pretends', (sim) => {
+  sim.still(0.5);
+  // creep the cursor slowly across the sand in front of Kon
+  let x = 1100;
+  sim.run(3.2, () => { x -= 1.1; sim.moveTo(x, 905); });
+  const stalked = sim.brain.stalkT > 0.9;
+  sim.still(4.5);
+  const ok = stalked && sim.states.includes('POUNCE') && sim.brain.state === 'PRETENDING' && sim.brain.caption.key === 'pounceMiss';
+  return { ok, info: `stalked=${stalked}; ${sim.states.join(' → ')}; caption=${sim.brain.caption.key}` };
+});
+
+test('a leaf lands on the sand → Kon trots over and pounces on it', (sim) => {
+  sim.still(3);
+  sim.objects = [{ id: 'leafA', kind: 'leafGround', x: 1000, y: 920, sal: 0.05 }];
+  let scattered = false;
+  sim.run(10, null, () => { for (const e of sim.brain.emits) if (e.type === 'scatterLeaf') scattered = true; });
+  return { ok: sim.states.includes('POUNCE') && scattered, info: `${sim.states.join(' → ')}; leaf scattered=${scattered}` };
+});
+
+test('a raked circle → Kon walks over before judging it', (sim) => {
+  sim.still(1);
+  sim.events.push({ type: 'rakeEnd', shape: 'circle', score: 8, x: 1000, y: 930, r: 70 });
+  let maxAway = 0, sign = null;
+  sim.run(9, null, (P) => { maxAway = Math.max(maxAway, away(sim)); if (P.sign !== null) sign = P.sign; });
+  return { ok: maxAway > 80 && sign === 8, info: `walked ${maxAway.toFixed(0)} units; card=${sign}; ${sim.states.join(' → ')}` };
 });
 
 export function runAll() {

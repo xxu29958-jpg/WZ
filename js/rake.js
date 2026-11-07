@@ -1,9 +1,11 @@
 // SandRake — drag across the sand to rake real grooves into it.
 //
-// Strokes are stored in world units and drawn onto a canvas that sits just
-// above the sand and below every object, so stones, the cushion and Kon all
-// stand in front of the grooves. The canvas slowly fades (destination-out),
-// so the garden smooths itself back over half a minute or so.
+// The sand canvas covers the raked area in world units (it pans with the
+// camera through a CSS transform, so nothing is redrawn while Kon walks). It
+// sits just above the sand and below every object, so stones, the cushion and
+// Kon stand in front of the grooves. It slowly fades (destination-out), so the
+// garden smooths itself back over half a minute or so. Kon's paw prints go
+// into the same sand.
 //
 // When a stroke ends it is analyzed: a closed loop is a circle to be judged,
 // many turns make a spiral. The result goes to the brain as a 'rake' event.
@@ -19,6 +21,8 @@ const SQUASH = 0.52;             // the ground plane is seen at an angle
 
 const NO_RAKE = '.clickable, #kon, #kon-head, #wish, .corner, .hints, #flower, button, input';
 
+const AREA = { x: -340, y: 700, w: 2280, h: 420 }; // the sand the canvas covers, in world units
+
 export class SandRake {
   constructor({ canvas, scene, emit }) {
     this.cv = canvas;
@@ -26,25 +30,37 @@ export class SandRake {
     this.scene = scene;
     this.emit = emit;
     this.strokes = [];
+    this.prints = [];
     this.active = null;
     this.fadeT = 0;
     this.t = 0;
-    this.dpr = 1;
+    this.res = 0;
   }
 
+  /** Pick a canvas resolution for this screen; reallocate (and redraw) only if it changed a lot. */
   layout() {
     const sc = this.scene;
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.cv.width = Math.round(sc.W * this.dpr);
-    this.cv.height = Math.round(sc.H * this.dpr);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const res = clamp(sc.scale * dpr, 1.2, 2.2);
+    if (Math.abs(res - this.res) < 0.25) return;
+    this.res = res;
+    this.cv.width = Math.round(AREA.w * res);
+    this.cv.height = Math.round(AREA.h * res);
     this.applyTransform();
     this.redraw();
   }
 
   applyTransform() {
+    const r = this.res;
+    this.g.setTransform(r, 0, 0, r, -AREA.x * r, -AREA.y * r);
+  }
+
+  /** Follow the camera: a CSS transform only. */
+  place() {
     const sc = this.scene;
-    const s = sc.scale * this.dpr;
-    this.g.setTransform(s, 0, 0, s, -sc.vb.x * s, -sc.vb.y * s);
+    if (!this.res || !sc.vb) return;
+    const p = sc.toScreen(AREA.x, AREA.y);
+    this.cv.style.transform = `translate(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px) scale(${(sc.scale / this.res).toFixed(5)})`;
   }
 
   // ---------------------------------------------------------------- input
@@ -151,12 +167,47 @@ export class SandRake {
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, this.cv.width, this.cv.height);
     g.restore();
+    const fade = (t0) => Math.pow(1 - FADE_ALPHA, (this.t - t0) / FADE_EVERY);
     for (const s of this.strokes) {
-      const age = this.t - (s.ended ?? this.t);
-      const alpha = Math.pow(1 - FADE_ALPHA, age / FADE_EVERY);
+      const alpha = fade(s.ended ?? this.t);
       if (alpha > 0.03) this.drawStroke(s, alpha);
     }
+    for (const p of this.prints) {
+      const alpha = fade(p.t);
+      if (alpha > 0.03) this.drawPrint(p, alpha);
+    }
     if (this.active && this.active.pts.length > 1) this.drawStroke(this.active, 1);
+  }
+
+  // ---------------------------------------------------------------- paw prints
+  /** A small paw print where Kon's foot came down. */
+  pawPrint(x, y, foot, dir, ds) {
+    if (y < SAND_TOP + 6) return;
+    const p = { x: x + (foot === 'l' ? -7 : 7) * ds * (dir > 0 ? 0.5 : -0.5) , y: y + (foot === 'l' ? -2 : 2) * ds, dir, ds, t: this.t };
+    this.prints.push(p);
+    if (this.prints.length > 160) this.prints.shift();
+    this.drawPrint(p, 1);
+  }
+
+  drawPrint(p, alpha) {
+    const g = this.g;
+    const s = 4.2 * p.ds;
+    g.save();
+    g.globalAlpha = alpha;
+    g.translate(p.x, p.y);
+    g.scale(1, SQUASH);
+    g.rotate(p.dir > 0 ? 0.2 : -0.2);
+    const blob = (cx, cy, rx, ry, dark) => {
+      g.fillStyle = dark ? 'rgba(186, 161, 118, .75)' : 'rgba(250, 245, 232, .8)';
+      g.beginPath();
+      g.ellipse(cx, cy, rx, ry, 0, 0, TAU);
+      g.fill();
+    };
+    // a little highlight on the far rim, then the pad and three toes
+    blob(0, -0.8 * s, 1.25 * s, 1.0 * s, false);
+    blob(0, 0, 1.2 * s, 0.95 * s, true);
+    for (const k of [-1, 0, 1]) blob(k * 1.05 * s + p.dir * 0.35 * s, -1.55 * s + Math.abs(k) * 0.35 * s, 0.42 * s, 0.38 * s, true);
+    g.restore();
   }
 
   update(dt) {
@@ -172,6 +223,7 @@ export class SandRake {
       g.fillRect(0, 0, this.cv.width, this.cv.height);
       g.restore();
       this.strokes = this.strokes.filter((s) => this.t - s.ended < 70);
+      this.prints = this.prints.filter((p) => this.t - p.t < 70);
     }
   }
 

@@ -488,6 +488,176 @@ Object.assign(ACTS, {
 
 export const TEMPT_ACTS = ['temptWave', 'temptFaces', 'temptPeekaboo', 'temptDance'];
 
+// ---------------- a life in the garden: things Kon does at places ----------------
+
+Object.assign(ACTS, {
+  drink: {
+    caption: 'lifeDrink',
+    pose(t, P, c) {
+      P.posture = 'stand';
+      P.gaze = c.place('basinWater');
+      P.headFollow = 0.9;
+      P.bodyFollow = 0.6;
+      P.reachY = 14;
+      P.pitch = 0.4;
+      const lap = Math.max(0, Math.sin(t * 9));
+      P.tongue = t > 0.7 ? 0.35 + 0.5 * lap : 0;
+      P.mouthOpen = t > 0.7 ? 0.12 : 0;
+      P.lidL = P.lidR = 0.35;
+      P.earPerk = 0.3;
+      P.tailAmp = 0.25;
+      if (t > 3.2) { P.tongue = 0; P.smile = 0.6; P.pitch = 0; P.reachY = 0; }
+    },
+  },
+
+  lanternLook: {
+    caption: 'lifeLantern',
+    pose(t, P, c) {
+      P.gaze = c.place('lantern');
+      P.headFollow = 0.9;
+      P.pitch -= 0.15;
+      P.smile = 0.5;
+      P.earPerk = 0.4;
+      if (c.night) {
+        // warming its paws at the lantern
+        P.sparkle = 0.7;
+        P.posture = 'stand';
+        P.armL = { x: c.facing * 34 - 8, y: -72, space: 'body' };
+        P.armR = { x: c.facing * 34 + 8, y: -70, space: 'body' };
+        P.shutL = P.shutR = bump(1.4, 3.4, t) * 0.9;
+        P.shutStyle = 'happy';
+      }
+    },
+  },
+
+  watchSnail: {
+    caption: 'lifeSnail',
+    pose(t, P, c) {
+      P.posture = 'stand';
+      P.crouch = 0.3;
+      P.gaze = c.place('snail');
+      P.headFollow = 1;
+      P.bodyFollow = 0.4;
+      P.pupil = 1.35;
+      P.eyeOpen = 1.06;
+      P.earPerk = 0.7;
+      P.tailAmp = 0.35;
+      P.tailSpeed = 0.5;
+      if (t > 2.1 && t < 2.6) {
+        P.armL = { ...c.place('snail'), space: 'world' };
+        c.once('poke', () => c.emit('snailPoke'));
+      }
+      if (t > 2.6 && t < 3.6) { P.eyeOpen = 1.2; P.browL = P.browR = 0.8; P.mouthOpen = 0.2; }
+      if (t > 3.6) { P.smile = 0.8; P.shutL = P.shutR = 1; P.shutStyle = 'happy'; }
+    },
+  },
+
+  readPlaques: {
+    caption: 'lifeRack',
+    pose(t, P, c) {
+      P.posture = 'stand';
+      P.stretch = 0.8;
+      P.reachY = -18;
+      const r = c.place('rack');
+      P.gaze = { x: r.x - 90 + ((Math.floor(t / 1.1) % 4) * 60), y: r.y };
+      P.headFollow = 0.9;
+      P.tilt = Math.sin(t * 1.3) * 9;
+      P.mouthOpen = 0.08;
+      P.browL = 0.5;
+      P.browR = 0.2;
+      if (t > 3.6) { P.pitch = Math.sin((t - 3.6) * 10) * 0.12; P.smile = 0.5; }
+    },
+  },
+
+  watchShishi: {
+    caption: 'lifeShishi',
+    pose(t, P, c) {
+      P.gaze = c.place('bambooTube');
+      P.headFollow = 0.8;
+      P.earPerk = 0.6;
+      P.tailAmp = 0.2;
+      P.pupil = 1.2;
+      P.tilt = Math.sin(t * 0.8) * 7;
+      P.browL = P.browR = 0.3;
+    },
+  },
+
+  sunbathe: {
+    caption: 'lifeRock',
+    pose(t, P, c) {
+      P.shutL = P.shutR = smoothstep(0.3, 1.2, t);
+      P.shutStyle = 'happy';
+      P.smile = 0.75;
+      P.pitch = -0.22;
+      P.breath = 0.5;
+      P.earPerk = -0.3;
+      P.tailBase = 22;
+      P.tailAmp = 0.08;
+      P.blink = false;
+      P.armL = { x: -48, y: -36, space: 'body' };
+      P.armR = { x: 48, y: -36, space: 'body' };
+    },
+  },
+
+  lookUp: {
+    caption: 'lifeMaple',
+    pose(t, P, c) {
+      P.gaze = { x: c.place('maple').x + Math.sin(t * 0.7) * 60, y: c.place('maple').y + 60 };
+      P.headFollow = 1;
+      P.pitch -= 0.1;
+      P.mouthOpen = 0.12;
+      P.sparkle = 0.4;
+      P.earPerk = 0.4;
+      P.posture = 'stand';
+      P.stretch = 0.5;
+    },
+  },
+
+  sniffGround: {
+    caption: 'lifeSniff',
+    pose(t, P, c) {
+      P.posture = 'stand';
+      P.crouch = 0.22;
+      P.gaze = c.away(c.facing * 50, 200);
+      P.headFollow = 1;
+      P.pitch = 0.5;
+      P.reachY = 10;
+      P.mouthOpen = Math.max(0, Math.sin(t * 24)) * 0.05;
+      P.earPerk = 0.5;
+      P.tailAmp = 0.3;
+      if (c.seed < 0.25 && t > 2.2) c.once('achoo', () => { c.impulse({ type: 'sneeze' }); c.emit('sfx', 'sneeze'); });
+    },
+  },
+
+  lookUnder: {
+    pose(t, P, c) {
+      // lifts a paw: is it under there?
+      P.posture = 'stand';
+      P.armR = { x: 30 + c.facing * 6, y: -34, space: 'body' };
+      P.gaze = c.away(c.facing * 30, 170);
+      P.headFollow = 0.9;
+      P.pitch = 0.45;
+      P.browTiltL = P.browTiltR = 0.5;
+      P.browL = P.browR = 0.4;
+      if (t > 0.9) { P.armL = { x: -30 + c.facing * 6, y: -34, space: 'body' }; P.armR = null; P.gaze = c.away(-c.facing * 30, 170); }
+    },
+  },
+});
+
+/** Places Kon visits on its own, how much it likes them, and what it does there. */
+export const ACTIVITIES = [
+  { id: 'home', weight: 0.8, act: null, dur: [8, 14] },
+  { id: 'flower', weight: 1.0, act: 'flowerSniff', dur: [3.2, 4] },
+  { id: 'basin', weight: 0.9, act: 'drink', dur: [4.2, 5] },
+  { id: 'lantern', weight: 0.6, nightWeight: 2.4, act: 'lanternLook', dur: [4, 5.5] },
+  { id: 'snail', weight: 0.6, act: 'watchSnail', dur: [4.6, 5.2] },
+  { id: 'rack', weight: 0.55, act: 'readPlaques', dur: [4.4, 5] },
+  { id: 'shishi', weight: 0.6, act: 'watchShishi', dur: [6, 9] },
+  { id: 'rock', weight: 0.7, act: 'sunbathe', dur: [7, 10] },
+  { id: 'maple', weight: 0.45, act: 'lookUp', dur: [3.6, 4.4] },
+  { id: 'wander', weight: 0.9, act: 'sniffGround', dur: [3, 3.6] },
+];
+
 export const PRETEND_ACTS = ['meditate', 'whistle', 'groom', 'flower', 'sky', 'fakesleep'];
 export const IDLE_ACTS = [
   ['lookAround', 3, 4.6],
