@@ -63,19 +63,22 @@ Nothing typed is read or stored: Kon only receives "an input happened" events (s
 Plain ES modules, hand-drawn SVG, canvas for ink and sand, and one `requestAnimationFrame` loop. There's no framework.
 
 ```
-InputTracker (js/input.js)   raw DOM events → "senses" (pointer, typing, events)
-      ↓
-Brain        (js/brain.js)   senses → intent: a pose, plus where Kon wants to be
-  ├ Acts     (js/acts.js)    authored performances: innocence acts, idle and life activities
-  └ World    (js/world.js)   the ground: perspective, obstacles, platforms, places, paths
-      ↓
-Mover        (js/mover.js)   intent → motion: gaits, momentum, path following, jumps, footfalls
-      ↓
-FoxRig       (js/rig.js)     pose + motion → ~65 springs → SVG (legs, walk cycle, facing, tail)
-Scene        (js/scene.js)   camera, parallax, depth sorting, garden props
-  ├ SandRake (js/rake.js)    raked grooves, paw prints, circle judging
-  └ ZenFX    (js/zen.js)     the live ensō, spirit brush, aura and seal
+js/input.js            raw DOM events → "senses" (pointer, typing, events)
+  ↓
+js/kon/                Kon
+  brain.js             perception, attention, events, the state machine's plumbing
+  life.js · social.js · stillness.js · play.js    the states, grouped by what they're about
+  acts.js · captions.js                           authored performances and the narrator's lines
+  mover.js             intent → motion: gaits, momentum, path following, jumps, footfalls
+  rig.js               motion + pose → springs → SVG (face.js, limbs.js, effects.js)
+js/garden/             the garden
+  world.js             the ground: perspective, obstacles, platforms, places, paths
+  scene.js             framing, camera, parallax, depth sorting, overlays (art.js, props.js)
+  rake.js · zen.js · enso.js                      raking and paw prints, the live ensō, the brush
+js/main.js             wiring and the loop · util.js, math.js, clock.js, memory.js, audio.js, demo.js
 ```
+
+The brain, rig and scene are each one class whose methods are grouped into a few files by responsibility (`mixin(Brain, Life, Social, Stillness, Play)`). A state's code lives next to related states, not in one long file.
 
 - **A ground with perspective.** Every point on the ground has a depth scale. Kon is 1.15× at the cushion, about 0.9× near the wall, and about 1.5× right in front of you. Moving toward or away from the viewer covers fewer screen units than moving sideways. The scenery is sorted by where it meets the ground, and Kon is re-inserted among it as it walks, so it passes behind the lantern and in front of the rock.
 - **A body with momentum.** The brain only says where it wants to be. The mover accelerates with limited force, slows down on arrival, and walks around obstacles (a tiny planner: detours around ellipses, replanning when stuck). It hops onto the cushion and rock and flies ballistic arcs for pounces. Footfalls drive paw prints in the sand; landings squash the rig.
@@ -115,28 +118,15 @@ Scene        (js/scene.js)   camera, parallax, depth sorting, garden props
 - **Sound** is a few basic synthesized effects, off by default.
 - `js/demo.js` (verification helpers) ships with the page. Drop it before production.
 
-## Files
+## Tests
 
+```bash
+python3 tests/run.py                       # 45 behavior tests + a boot check, headless Firefox
+python3 tests/live/scenarios.py            # live: real mouse/keyboard/touch in real time, desktop + phone
+python3 tests/visual_diff.py capture DIR   # pixel baseline of 14 scripted demos…
+python3 tests/visual_diff.py compare DIR   # …and the diff after a change
+python3 tests/live/observe.py --seconds 60 # watch the garden untouched: states, frame times, errors
+python3 tests/live/perf.py --walk          # frame times with layers switched off one at a time
 ```
-index.html          the scene (SVG art for the garden and Kon), plaque, controls
-css/style.css       palette, paint classes, layout, night/dusk, effects
-js/main.js          wiring and the animation loop
-js/input.js         pointer + typing tracker (no text is read)
-js/brain.js         behavior: life layer + social layer + state machine
-js/acts.js          innocence acts, idle behaviors, life activities, temptations
-js/world.js         ground, perspective, obstacles, platforms, places, path planning
-js/mover.js         locomotion: gaits, momentum, jumps, footfalls
-js/rig.js           springs → SVG: face, body, legs, walk cycle, tail, effects
-js/scene.js         camera, parallax, depth sorting, layout, garden props
-js/rake.js          raking, paw prints, stroke analysis, doodles
-js/zen.js           live ensō, spirit brush, aura, satori seal
-js/enso.js          the procedural sumi brush
-js/memory.js        what Kon remembers about you (localStorage)
-js/captions.js      the narrator's lines
-js/audio.js         tiny Web Audio synth
-js/math.js          springs, easing, seeded random, shuffle bag, splines
-js/clock.js         real or virtual clock
-js/demo.js          scripted demos for screenshots
-tests/              behavior tests and the screenshot script
-serve.py            no-cache local server
-```
+
+All of these need the dev server running (`python3 serve.py`) and Firefox installed. Add `--url http://localhost:PORT` if it isn't on 8070.

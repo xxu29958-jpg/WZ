@@ -529,6 +529,7 @@ html, body {
 
 /* scripted demo / manual clock: no real-time transitions */
 .frozen *, .frozen *::before, .frozen *::after { transition: none !important; animation: none !important; }
+.frozen input { caret-color: transparent; }
 .demo-cursor { position: absolute; left: 0; top: 0; z-index: 70; pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
 .demo-cursor[hidden] { display: none; }
 

@@ -16,7 +16,7 @@
 //   emit(type)    ask the scene for something (spawn a dragonfly, bob the flower)
 //   impulse(i)    one-shot physical kick for the rig
 
-import { smoothstep, bump, track } from './math.js';
+import { smoothstep, bump, track } from '../math.js';
 
 const GASSHO_L = { x: -5, y: -76, space: 'body' };
 const GASSHO_R = { x: 5, y: -76, space: 'body' };

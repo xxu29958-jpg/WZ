@@ -6,7 +6,7 @@
 // to the viewer. Things closer are bigger (depthScale), and moving toward or
 // away from the viewer covers fewer screen units than moving sideways.
 
-import { clamp } from './math.js';
+import { clamp } from '../math.js';
 
 export const HORIZON = 400;   // where the ground would vanish
 export const HOME_Y = 826;    // the cushion's ground row: depthScale = 1 here
@@ -54,6 +54,19 @@ export const POIS = {
   maple: { stand: { x: 1010, y: 762 }, face: 1, look: { x: 1180, y: 300 } },
   rock: { platform: 'rock', look: { x: 1180, y: 320 } },
   home: { platform: 'cushion' },
+};
+
+/** Things Kon likes to look at (world points above the ground). */
+export const PLACES = {
+  lantern: { x: 330, y: 584 },
+  bamboo: { x: 470, y: 860 },
+  maple: { x: 1220, y: 150 },
+  rack: { x: 1300, y: 650 },
+  sky: { x: 900, y: 120 },
+  flower: { x: 670, y: 774 },
+  snail: { x: 352, y: 744 },
+  basinWater: { x: 471, y: 884 },
+  bambooTube: { x: 500, y: 846 },
 };
 
 /** Draw order of the scenery (the row where each thing meets the ground). */

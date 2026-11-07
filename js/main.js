@@ -9,18 +9,18 @@
 // One requestAnimationFrame loop drives everything; DOM events only record data.
 // Around it: ZenFX (the live ensō), SandRake (raking) and a small memory of you.
 
-import { Brain } from './brain.js';
-import { FoxRig } from './rig.js';
+import { Brain } from './kon/brain.js';
+import { FoxRig } from './kon/rig.js';
 import { InputTracker } from './input.js';
-import { Scene } from './scene.js';
+import { Scene } from './garden/scene.js';
 import { Sound } from './audio.js';
 import { setClock } from './clock.js';
 import { makeRng } from './math.js';
 import { runDemo } from './demo.js';
 import { arrive, touch, saveMemory } from './memory.js';
-import { DOODLE_KINDS } from './rake.js';
-import { Mover } from './mover.js';
-import { depthScale } from './world.js';
+import { DOODLE_KINDS } from './garden/rake.js';
+import { Mover } from './kon/mover.js';
+import { depthScale } from './garden/world.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');

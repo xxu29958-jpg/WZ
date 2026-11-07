@@ -4,7 +4,7 @@
 // freezes on the moment worth looking at. A small drawn cursor shows where
 // the "mouse" is, since screenshots don't include the real one.
 
-import { ACTIVITIES } from './acts.js';
+import { ACTIVITIES } from './kon/acts.js';
 
 export function runDemo(zen, name, opts = {}) {
   const app = document.getElementById('app');
