@@ -6,6 +6,7 @@
 // primary channels. The rig owns the SVG nodes; nothing else writes to them.
 
 import { Spring, clamp, lerp, smoothstep, TAU, DEG, closedSpline } from './math.js';
+import { konScale, footY } from './world.js';
 
 export const FOX_ORIGIN = { x: 800, y: 788 };
 export const FOX_SCALE = 1.15;
@@ -16,6 +17,7 @@ const ARM_MAX = 118;
 const EYES = { l: { x: -37, y: -4 }, r: { x: 37, y: -4 } };
 const TAIL_SEGS = 12;
 const TAIL_LEN = 12.5;
+const KON_REF = 1.15; // Kon's scale at depthScale 1
 
 const f2 = (v) => (Math.abs(v) < 1e-4 ? '0' : v.toFixed(2));
 const tr = (x, y) => `translate(${f2(x)} ${f2(y)})`;
@@ -88,6 +90,15 @@ export class FoxRig {
       armL: arm(q('#kon-arm-l')),
       armR: arm(q('#kon-arm-r')),
       fx: q('#kon-fx'),
+      shadow: q('.kon-shadow'),
+      sign: q('#kon-sign'),
+      signText: q('#kon-sign-text'),
+      upper: q('#kon-upper'),
+      belly: q('#kon-belly'),
+      legL: { ol: q('#kon-leg-l-ol'), fill: q('#kon-leg-l') },
+      legR: { ol: q('#kon-leg-r-ol'), fill: q('#kon-leg-r') },
+      footL: q('#kon-foot-l'),
+      footR: q('#kon-foot-r'),
     };
 
     const S = (x, f, z) => new Spring(x, f, z);
@@ -111,7 +122,11 @@ export class FoxRig {
       pawLx: S(-PAW_REST.x, 4.2, 0.72), pawLy: S(PAW_REST.y, 4.2, 0.72),
       pawRx: S(PAW_REST.x, 4.2, 0.72), pawRy: S(PAW_REST.y, 4.2, 0.72),
       tailBase: S(0, 1.1, 0.85), tailCurl: S(0, 1.1, 0.85), tailAmp: S(0.15, 0.9, 1),
+      float: S(0, 0.55, 0.62), sign: S(0, 4.5, 0.45),
+      stand: S(0, 3.2, 0.72), bodyYaw: S(0, 3.6, 0.85), tailSide: S(1, 1.6, 0.8),
     };
+    this.tailSideT = 1;
+    this.signValue = null;
 
     this.t = 0;
     this.breathPhase = 0;
@@ -128,7 +143,7 @@ export class FoxRig {
     // live geometry, refreshed every frame
     this.g = {
       sx: 1, sy: 1, hx: 0, hy: -145, hsx: 1, hsy: 1, tilt: 0, lean: 0, hop: 0,
-      faceX: 0, faceY: 0,
+      faceX: 0, faceY: 0, upperY: 0, tailSide: 1,
     };
 
     this.fx = new FxLayer(this.el.fx, rng);
@@ -151,10 +166,22 @@ export class FoxRig {
   bodyToWorld(x, y) {
     return this.localToWorld(this.bodyToLocal(x, y));
   }
-  headToBody(x, y) {
+  /** Head space → the upper body's space (it rises on Kon's legs when standing). */
+  headToUpper(x, y) {
     const g = this.g;
     const p = rot(x * g.hsx, y * g.hsy, g.tilt);
     return { x: g.hx + p.x, y: g.hy + p.y };
+  }
+  headToBody(x, y) {
+    const p = this.headToUpper(x, y);
+    return { x: p.x, y: p.y + this.g.upperY };
+  }
+  upperToWorld(x, y) {
+    return this.bodyToWorld(x, y + this.g.upperY);
+  }
+  worldToUpper(x, y) {
+    const b = this.worldToBody(x, y);
+    return { x: b.x, y: b.y - this.g.upperY };
   }
   headToWorld(x, y) {
     const b = this.headToBody(x, y);
@@ -171,20 +198,41 @@ export class FoxRig {
     return {
       head: this.headToWorld(0, -8),
       nose: this.headToWorld(this.g.faceX * 1.3, 22 + this.g.faceY),
-      restHead: this.localToWorld({ x: 0, y: -150 }),
+      restHead: this.localToWorld({ x: 0, y: -150 + this.g.upperY }),
       mouth: this.headToWorld(this.g.faceX, 34 + this.g.faceY),
-      tail: this.bodyToWorld(110, -110),
-      bib: this.bodyToWorld(0, -80),
+      center: this.upperToWorld(0, -70),
+      tail: this.upperToWorld(110 * this.g.tailSide, -110),
+      bib: this.upperToWorld(0, -80),
+      feet: this.localToWorld({ x: 0, y: 0 }),
       scale: this.scale,
     };
   }
 
   // ---------- main update ----------
-  update(dt, P) {
+  /**
+   * @param P     pose targets from the brain
+   * @param loco  the mover's state (where Kon stands, how it walks), optional
+   */
+  update(dt, P, loco = null) {
     dt = Math.min(dt, 0.05);
     this.t += dt;
     const s = this.s;
     const m = this.motion;
+    if (loco) {
+      // stand where the mover says, as big as that depth makes Kon
+      this.scale = konScale(loco.y);
+      this.origin = { x: loco.x, y: footY(loco.y, loco.h) };
+      this.root.setAttribute('transform', `${tr(this.origin.x, this.origin.y)} scale(${this.scale.toFixed(4)})`);
+    }
+    const walkN = loco && !loco.airborne ? clamp(loco.speed / 110) : 0;
+    const phase = loco ? loco.phase : 0;
+    const facing = loco ? loco.facing : 0;
+    const airborne = !!(loco && loco.airborne);
+    const stand = s.stand.step(dt, (loco && (loco.moving || airborne)) || P.posture === 'stand' ? 1 : 0);
+    const bodyYaw = s.bodyYaw.step(dt, facing);
+    if (facing > 0.3) this.tailSideT = -1;
+    else if (facing < -0.3) this.tailSideT = 1;
+    this.g.tailSide = s.tailSide.step(dt, this.tailSideT);
     const zMin = this.reduced ? 0.9 : 0;
     const snapMul = 1 + 1.5 * (P.snap || 0);
 
@@ -211,20 +259,25 @@ export class FoxRig {
 
     // ---- head ----
     const hf = P.headFollow ?? 0.5;
-    const yaw = s.yaw.step(dt, clamp(gx * hf + P.yaw, -1, 1), snapMul, zMin);
+    const yaw = s.yaw.step(dt, clamp(gx * hf + P.yaw + bodyYaw * 0.45, -1, 1), snapMul, zMin);
     const pitch = s.pitch.step(dt, clamp(gy * hf * 0.85 + P.pitch, -1, 1), snapMul, zMin);
     const tilt = s.tilt.step(dt, (P.tilt + gx * hf * 3) * m, 1, zMin);
 
     // ---- body ----
     const bf = P.bodyFollow ?? 0;
     const leanPrev = s.lean.x;
-    const lean = s.lean.step(dt, (P.lean + gx * bf * 13) * m, snapMul, zMin);
+    const walkLean = facing * walkN * 5 + Math.sin(phase) * 1.8 * walkN;
+    const lean = s.lean.step(dt, (P.lean + gx * bf * 13 + walkLean) * m, snapMul, zMin);
     const leanV = (lean - leanPrev) / Math.max(dt, 1e-4);
     const reachX = s.reachX.step(dt, (P.reachX + gx * bf * 30) * m, snapMul, zMin);
     const reachY = s.reachY.step(dt, (P.reachY + gy * bf * 10) * m, snapMul, zMin);
-    const stretch = s.stretch.step(dt, P.stretch * m, snapMul, zMin);
+    const airStretch = airborne && loco.jumpU < 0.55 ? 0.35 : 0;
+    const stretch = s.stretch.step(dt, (P.stretch + airStretch) * m, snapMul, zMin);
     const crouch = s.crouch.step(dt, P.crouch * m, snapMul, zMin);
     const hop = s.hop.step(dt, 0, 1, zMin);
+    // levitation: a slow rise, a gentle bob, and a fast drop when it ends
+    const floatT = (P.float || 0) * m;
+    const float = s.float.step(dt, floatT, floatT === 0 && s.float.x < -4 ? 2.6 : 1, zMin);
     const pout = s.pout.step(dt, P.pout || 0);
     const hScale = s.headScale.step(dt, P.headScale ?? 1);
 
@@ -232,7 +285,7 @@ export class FoxRig {
     g.sy = 1 + stretch * 0.15 - crouch * 0.13 + br * 0.013 * (P.breath ? 1 : 1);
     g.sx = 1 / Math.sqrt(Math.max(0.6, g.sy)) + crouch * 0.03;
     g.lean = lean * DEG;
-    g.hop = hop * m;
+    g.hop = hop * m + float;
     g.tilt = tilt * DEG;
     g.hsx = hScale * (1 - Math.abs(yaw) * 0.03 + pout * 0.05);
     g.hsy = hScale * (1 - pout * 0.015);
@@ -240,11 +293,18 @@ export class FoxRig {
     g.hy = -110 * g.sy - 35 + reachY + br * 1.1 + crouch * 6;
     g.faceX = yaw * 11;
     g.faceY = pitch * 7;
+    // standing up on the legs, with a little bounce on every step
+    const bob = walkN > 0 ? -Math.abs(Math.sin(phase)) * (loco.gait === 'trot' ? 6 : 3.4) * walkN * m : 0;
+    g.upperY = -21 * stand + bob;
+    g.stand = stand;
+    g.bodyYaw = bodyYaw;
 
     const el = this.el;
     el.body.setAttribute('transform', `${tr(0, g.hop)} rotate(${f2(lean)})`);
+    el.upper.setAttribute('transform', tr(0, g.upperY));
     el.torso.setAttribute('transform', `scale(${f2(g.sx)} ${f2(g.sy)})`);
-    el.bib.setAttribute('transform', `translate(0 ${f2(-110 * (g.sy - 1))}) scale(${f2(g.sx)} 1)`);
+    el.belly.setAttribute('transform', tr(bodyYaw * 10, 0));
+    el.bib.setAttribute('transform', `translate(${f2(bodyYaw * 8)} ${f2(-110 * (g.sy - 1))}) scale(${f2(g.sx)} 1)`);
     el.head.setAttribute('transform', `${tr(g.hx, g.hy)} rotate(${f2(tilt)}) scale(${f2(g.hsx)} ${f2(g.hsy)})`);
     el.face.setAttribute('transform', tr(g.faceX, g.faceY));
     el.mask.setAttribute('transform', tr(yaw * 7, pitch * 4.5));
@@ -254,8 +314,8 @@ export class FoxRig {
     {
       const bl = { x: -25 * g.sx, y: -101 * g.sy };
       const brr = { x: 25 * g.sx, y: -101 * g.sy };
-      const tl = this.headToBody(-27, 44);
-      const trr = this.headToBody(27, 44);
+      const tl = this.headToUpper(-27, 44);
+      const trr = this.headToUpper(27, 44);
       const my1 = (bl.y + tl.y) / 2, my2 = (brr.y + trr.y) / 2;
       const p = (v) => `${f2(v.x)},${f2(v.y)}`;
       const left = `C ${f2(bl.x)},${f2(my1)} ${f2(tl.x)},${f2(my1)} ${p(tl)}`;
@@ -376,8 +436,30 @@ export class FoxRig {
     el.bubble.setAttribute('cy', f2(25 + bubR * 0.35));
 
     // ---- arms ----
+    this.walk = { n: walkN, phase, facing, stand };
     this.drawArm(dt, 'l', P.armL);
     this.drawArm(dt, 'r', P.armR);
+
+    // ---- the shadow stays on the cushion and shrinks as Kon rises ----
+    const air = loco ? Math.max(0, loco.h - (loco.surfaceH || 0)) : 0;
+    const lift = clamp((-float + air) / 40);
+    el.shadow.setAttribute('cy', f2(2 + air / KON_REF));
+    el.shadow.setAttribute('transform', `scale(${f2(1 - lift * 0.35)} ${f2(1 - lift * 0.3)})`);
+    this.drawLegs(walkN, phase, facing, airborne);
+    el.shadow.style.opacity = f2(1 - lift * 0.55);
+
+    // ---- score card in the right paw ----
+    const showSign = P.sign !== null && P.sign !== undefined;
+    if (showSign && P.sign !== this.signValue) {
+      this.signValue = P.sign;
+      el.signText.textContent = String(P.sign);
+    }
+    const sg = clamp(s.sign.step(dt, showSign ? 1 : 0), 0, 1.3);
+    el.sign.setAttribute('opacity', f2(clamp(sg * 1.6)));
+    if (sg > 0.01) {
+      const px = s.pawRx.x, py = s.pawRy.x;
+      el.sign.setAttribute('transform', `${tr(px, py - 2)} rotate(${f2(Math.sin(this.t * 1.7) * 4 + 6)}) scale(${f2(Math.max(0.01, sg))})`);
+    }
 
     // ---- tail ----
     this.drawTail(dt, P, lean);
@@ -427,6 +509,13 @@ export class FoxRig {
       }
       case 'hop':
         s.hop.v -= 300 * k * m;
+        break;
+      case 'land':
+        s.crouch.v += 9 * k * m;
+        s.earL.v -= 260 * k;
+        s.earR.v += 260 * k;
+        s.ahoge.v += 500 * k;
+        s.bell.v += 90 * k;
         break;
       case 'shudder':
         s.lean.v += (this.rng() < 0.5 ? -1 : 1) * 40 * k * m;
@@ -536,9 +625,17 @@ export class FoxRig {
   // ---------- arms ----------
   resolvePaw(t, side) {
     const sgn = side === 'l' ? -1 : 1;
-    if (!t) return { x: sgn * PAW_REST.x, y: PAW_REST.y };
-    if (t.space === 'head') return this.headToBody(t.x, t.y);
-    if (t.space === 'world') return this.worldToBody(t.x, t.y);
+    if (!t) {
+      // paws in the lap — or swinging along when walking
+      const w = this.walk || { n: 0, phase: 0, facing: 0, stand: 0 };
+      const swing = Math.sin(w.phase + (sgn > 0 ? 0 : Math.PI)) * 9 * w.n;
+      return {
+        x: sgn * lerp(PAW_REST.x, 34, w.stand) + w.facing * swing,
+        y: lerp(PAW_REST.y, -40, w.stand) + Math.abs(swing) * 0.3,
+      };
+    }
+    if (t.space === 'head') return this.headToUpper(t.x, t.y);
+    if (t.space === 'world') return this.worldToUpper(t.x, t.y);
     return { x: t.x, y: t.y };
   }
   drawArm(dt, side, target) {
@@ -575,6 +672,38 @@ export class FoxRig {
     E.paw.setAttribute('transform', `${tr(px, py)} rotate(${f2(ang)})`);
   }
 
+  // ---------- legs and feet ----------
+  drawLegs(walkN, phase, facing, airborne) {
+    const g = this.g;
+    const stand = g.stand;
+    const L = -g.upperY;
+    for (const side of [-1, 1]) {
+      let fx = lerp(side * 34, side * 19, stand) + g.bodyYaw * 6 * stand;
+      let fy = lerp(-7, 0, stand);
+      let lift = 0;
+      if (airborne) {
+        lift = 10 * stand;
+        fx *= 0.8;
+      } else if (walkN > 0.02) {
+        const ph = phase + (side > 0 ? Math.PI : 0);
+        fx += facing * 9 * walkN * Math.cos(ph);
+        lift = Math.max(0, Math.sin(ph)) * 7 * walkN * this.motion;
+        fy += (1 - Math.abs(facing)) * Math.cos(ph) * 3 * walkN;
+      }
+      const sc = lerp(1, 0.66, stand);
+      const foot = side < 0 ? this.el.footL : this.el.footR;
+      foot.setAttribute('transform', `${tr(fx, fy - lift)} scale(${f2(sc)} ${f2(sc)})`);
+      const leg = side < 0 ? this.el.legL : this.el.legR;
+      const hip = { x: side * 20 * g.sx, y: -14 + g.upperY };
+      const d = `M ${f2(hip.x)},${f2(hip.y)} L ${f2(fx)},${f2(fy - lift - 4)}`;
+      leg.ol.setAttribute('d', d);
+      leg.fill.setAttribute('d', d);
+      const vis = f2(clamp((L - 2) / 6));
+      leg.ol.style.opacity = vis;
+      leg.fill.style.opacity = vis;
+    }
+  }
+
   // ---------- tail ----------
   drawTail(dt, P, lean) {
     const s = this.s;
@@ -608,6 +737,12 @@ export class FoxRig {
     }
     const tip = pts[TAIL_SEGS];
     const cap = [tip.x + Math.cos(tip.a) * 7, tip.y + Math.sin(tip.a) * 7];
+    // the tail trails behind: when Kon faces right it swings over to the left side
+    const ts = g.tailSide;
+    const mir = (q) => [q[0] * ts, q[1]];
+    for (let i = 0; i < left.length; i++) { left[i] = mir(left[i]); right[i] = mir(right[i]); }
+    for (const p of pts) p.x *= ts;
+    cap[0] *= ts;
     const outline = [...left, cap, ...right.slice().reverse()];
     const d = closedSpline(outline);
     this.el.tail.setAttribute('d', d);

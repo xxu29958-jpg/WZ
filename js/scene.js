@@ -4,6 +4,10 @@
 // dragonfly, fireflies). It reports interesting events and objects to the brain.
 
 import { Spring, clamp, lerp, smoothstep, TAU, DEG, makeRng, noise1, randRange } from './math.js';
+import { EnsoBrush } from './enso.js';
+import { ZenFX } from './zen.js';
+import { SandRake } from './rake.js';
+import { SORT_Y, depthScale } from './world.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 const $ = (id) => document.getElementById(id);
@@ -23,6 +27,8 @@ export const PLACES = {
   sky: { x: 900, y: 120 },
   flower: { x: 670, y: 774 },
   snail: { x: 352, y: 744 },
+  basinWater: { x: 471, y: 884 },
+  bambooTube: { x: 500, y: 846 },
 };
 
 const LEAF_COLORS = ['#e2483a', '#ec6a3a', '#f08a3c', '#e9a13a', '#d6402e', '#f2b04a'];
@@ -68,6 +74,20 @@ export class Scene {
     this.buildSand();
     this.buildMaple();
     this.buildFireflies();
+    this.zen = new ZenFX({ scene: this, brush: this.brush, reducedMotion });
+    this.rake = new SandRake({ canvas: $('sand-canvas'), scene: this, emit: (ev) => this.emit(ev) });
+    this.cursorGlow = { x: 0, y: 0, trail: [], on: false, built: false };
+    // depth: scenery that stands on the ground, sorted by where it meets the ground
+    this.depthEl = $('depth');
+    this.sortables = Object.entries(SORT_Y).map(([id, y]) => ({ id, y, el: $(id) })).sort((a, b) => a.y - b.y);
+    for (const o of this.sortables) this.depthEl.appendChild(o.el);
+    this.konBefore = null;
+    this.konAt = { x: 800, y: 826, seat: 'cushion' };
+    // camera: pans to follow Kon; far layers drift less (parallax)
+    this.camX = 0;
+    this.camV = 0;
+    this.appliedCamX = null;
+    this.captionW = 300;
     this.bindInteractions();
   }
 
@@ -107,20 +127,42 @@ export class Scene {
       const cx = (f.x0 + f.x1) / 2, cy = (f.y0 + f.y1) / 2;
       vb = { x: cx - w / 2, y: cy - h / 2 - (h - (f.y1 - f.y0)) * 0.08, w, h };
     }
-    this.vb = vb;
+    this.baseVb = vb;
     this.scale = W / vb.w;
+    this.paintGrain(W, H);
+    this.W = W;
+    this.H = H;
+    this.rake.layout();
+    this.applyView();
+  }
+
+  /** Where the camera should be, given where Kon is. */
+  cameraTarget() {
+    const kx = this.konAt.x - 800;
+    if (this.mode === 'wide') return clamp(kx * 0.3, -70, 70);
+    return clamp(kx, -470, 370);
+  }
+
+  /** Point every layer at the current camera position (cheap; no redraws). */
+  applyView() {
+    const vb = { ...this.baseVb, x: this.baseVb.x + this.camX };
+    this.vb = vb;
+    this.appliedCamX = this.camX;
     const vbs = `${f2(vb.x)} ${f2(vb.y)} ${f2(vb.w)} ${f2(vb.h)}`;
     for (const el of [this.back, this.svg, this.glow]) {
       el.setAttribute('viewBox', vbs);
       el.setAttribute('preserveAspectRatio', 'xMidYMid slice');
     }
+    // parallax: hills barely move, trees a little, the wall almost with the ground
+    const c = this.camX;
+    $('sky').setAttribute('transform', `translate(${f2(c * 0.78)} 0)`);
+    $('trees').setAttribute('transform', `translate(${f2(c * 0.5)} 0)`);
+    $('wall').setAttribute('transform', `translate(${f2(c * 0.15)} 0)`);
+    $('moon').setAttribute('transform', `translate(${f2(c * 0.9)} 0)`);
     // the ensō canvas sits between the two SVG layers at world (530, 330, 540 × 540)
     const e = this.toScreen(530, 330);
     const enso = $('enso');
     enso.style.transform = `translate(${f2(e.x)}px, ${f2(e.y)}px) scale(${(540 * this.scale / enso.width).toFixed(4)})`;
-    this.paintGrain(W, H);
-    this.W = W;
-    this.H = H;
     // the maple always leans in from the top-right corner of whatever is visible
     const ms = this.mode === 'wide' ? 1 : 0.7;
     // clear the branding on tall screens; with the keyboard up, lift it out of view
@@ -129,6 +171,38 @@ export class Scene {
     $('maple').setAttribute('transform', `translate(${f2(this.maple.x)} ${f2(this.maple.y)}) scale(${ms})`);
     PLACES.maple = this.mapleToWorld(1220, 150);
     this.positionOverlays();
+    this.zen.layout();
+    this.rake.place();
+  }
+
+  /** Re-sort Kon among the scenery and remember where Kon is (camera, caption). */
+  placeKon(st) {
+    this.konAt = st;
+    const key = st.seat ? SORT_Y[st.seat] + 0.5 : st.y;
+    const next = this.sortables.find((o) => o.y > key);
+    const id = next ? next.id : 'end';
+    if (id !== this.konBefore) {
+      this.konBefore = id;
+      const before = next ? next.el : null;
+      this.depthEl.insertBefore($('aura'), before);
+      this.depthEl.insertBefore($('kon'), before);
+    }
+  }
+
+  /** The narrator's line follows Kon around, just below its feet. */
+  placeCaption() {
+    const cap = this.caption;
+    const k = this.konAt;
+    const ds = depthScale(k.y);
+    let p = this.toScreen(k.x, k.y + 74 * ds);
+    const half = this.captionW / 2 + 14;
+    let x = clamp(p.x, half, this.W - half);
+    if (half * 2 > this.W) x = this.W / 2;
+    let y = p.y;
+    if (this.mode !== 'wide') y = Math.min(y, (this.emaPos ? this.emaPos.y : this.H) - 22);
+    y = Math.min(y, this.H - 26);
+    cap.style.left = `${f2(x)}px`;
+    cap.style.top = `${f2(y)}px`;
   }
 
   mapleToWorld(x, y) {
@@ -155,9 +229,6 @@ export class Scene {
       ema.style.setProperty('--ui-scale', ui.toFixed(3));
       const a = this.toScreen(1300, 646);
       this.emaPos = { x: a.x, y: a.y + 12 * ui, cord: true };
-      const c = this.toScreen(800, 900);
-      cap.style.left = `${c.x}px`;
-      cap.style.top = `${c.y}px`;
       cap.style.setProperty('--ui-scale', clamp(s, 0.85, 1.3).toFixed(3));
     } else {
       ui = clamp(this.W / 390, 0.92, 1.2);
@@ -166,17 +237,13 @@ export class Scene {
       const bottomPad = this.mode === 'compact' ? 10 : Math.max(22, this.H * 0.04);
       const top = this.H - emaH - bottomPad;
       this.emaPos = { x: this.W / 2, y: top, cord: false };
-      // caption between the cushion and the plaque (or above Kon when squeezed)
-      const cushion = this.toScreen(800, 860).y;
-      const cy = this.mode === 'compact' ? this.toScreen(800, 430).y + 6 : (cushion + top) / 2;
-      cap.style.left = `${this.W / 2}px`;
-      cap.style.top = `${cy}px`;
       cap.style.setProperty('--ui-scale', '0.92');
     }
     ema.classList.toggle('no-cord', !this.emaPos.cord);
     const inp = ema.querySelector('input');
     inp.placeholder = 250 * ui < 215 ? 'Kon won’t peek…' : 'Kon promises not to peek…';
     this.placeEma(0);
+    this.placeCaption();
   }
 
   placeEma(swing) {
@@ -263,66 +330,8 @@ export class Scene {
 
   buildEnso() {
     const c = $('enso');
-    const size = c.width;
-    const g = c.getContext('2d');
-    const rng = makeRng(70);
-    const cx = size / 2, cy = size / 2;
-    const R = size * 0.4537; // 245 world units at 540 world wide
-    const start = 116 * DEG, sweep = 306 * DEG;
-    const steps = 560;
-    const brushW = size * 0.034;
-    const width = (t) => brushW * (0.7 + 0.45 * Math.sin(Math.min(1, t * 4) * Math.PI * 0.5)) * (1 - 0.62 * Math.pow(t, 1.4));
-    const at = (t) => {
-      const a = start + sweep * t;
-      const r = R * (1 + 0.011 * Math.sin(t * 8.5 + 1) + 0.005 * Math.sin(t * 21)) + t * size * 0.008;
-      return [cx + Math.cos(a) * r, cy + Math.sin(a) * r, a];
-    };
-
-    // soft ink bleed underneath
-    g.lineCap = 'round';
-    for (let i = 0; i < steps; i += 2) {
-      const t = i / steps;
-      const [x, y] = at(t);
-      const [x2, y2] = at((i + 2) / steps);
-      g.strokeStyle = `rgba(40, 30, 26, ${0.05 * (1 - t)})`;
-      g.lineWidth = width(t) * 2.6;
-      g.beginPath();
-      g.moveTo(x, y);
-      g.lineTo(x2, y2);
-      g.stroke();
-    }
-
-    // bristles
-    const B = 84;
-    for (let b = 0; b < B; b++) {
-      const o = (b / (B - 1)) * 2 - 1;
-      const ink = 0.6 + 0.4 * rng();
-      const dryStart = 0.2 + 0.55 * rng() * (1 - Math.abs(o) * 0.7);
-      g.lineWidth = (brushW * 2 / B) * 2.2;
-      g.strokeStyle = `rgba(34, 24, 20, ${(0.56 * ink).toFixed(3)})`;
-      g.beginPath();
-      let drawing = false;
-      for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        const [x, y, a] = at(t);
-        const w = width(t) * (1 + 0.1 * noise1(t * 14, b + 3));
-        const px = x + Math.cos(a) * o * w;
-        const py = y + Math.sin(a) * o * w;
-        const dryness = t > dryStart ? (t - dryStart) * 2.4 : 0;
-        const dry = noise1(t * 46 + b * 2.7, b) > 1 - dryness;
-        if (!dry) {
-          if (drawing) g.lineTo(px, py);
-          else { g.moveTo(px, py); drawing = true; }
-        } else drawing = false;
-      }
-      g.stroke();
-    }
-    // ink pooling where the brush landed
-    const [sx, sy, sa] = at(0.004);
-    g.fillStyle = 'rgba(30, 22, 18, .85)';
-    g.beginPath();
-    g.ellipse(sx, sy, brushW * 0.8, brushW * 1.05, sa, 0, TAU);
-    g.fill();
+    this.brush = new EnsoBrush(c.width);
+    this.brush.paintAll(c.getContext('2d'));
   }
 
   buildSand() {
@@ -441,6 +450,18 @@ export class Scene {
   // ------------------------------------------------------------------ interactions
   bindInteractions() {
     const stop = (e) => e.stopPropagation();
+    // raking: press on open sand and drag
+    this.app.addEventListener('pointerdown', (e) => {
+      if (this.rake.tryBegin(e, this.toWorld(e.clientX, e.clientY))) {
+        try { this.app.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+      }
+    });
+    this.app.addEventListener('pointermove', (e) => {
+      if (this.rake.active) this.rake.extend(e, this.toWorld(e.clientX, e.clientY));
+    });
+    const endRake = (e) => { if (this.rake.active) this.rake.end(e); };
+    this.app.addEventListener('pointerup', endRake);
+    this.app.addEventListener('pointercancel', endRake);
     $('lantern').addEventListener('click', () => this.toggleNight());
     $('shishi').addEventListener('click', () => this.tipShishi(true));
     $('maple').addEventListener('click', (e) => {
@@ -452,7 +473,7 @@ export class Scene {
     $('flower').addEventListener('click', () => this.pokeFlower(1));
     $('snail').addEventListener('click', (e) => {
       stop(e);
-      this.snailHideUntil = this.t + 3.2;
+      this.hideSnail();
       this.emit({ type: 'notice', x: PLACES.snail.x, y: PLACES.snail.y });
       this.emit({ type: 'sfx', name: 'boop' });
     });
@@ -496,11 +517,11 @@ export class Scene {
       const spot = this.mapleToWorld(sp[0], sp[1]);
       const x = at && i === 0 ? at.x : spot.x;
       const y = at && i === 0 ? at.y : spot.y;
-      this.dropLeaf(x + (this.rng() * 2 - 1) * 20, y, i * 0.12);
+      this.dropLeaf(x + (this.rng() * 2 - 1) * 20, y, i * 0.12, true);
     }
   }
 
-  dropLeaf(x, y, delay = 0) {
+  dropLeaf(x, y, delay = 0, byVisitor = false) {
     if (this.leaves.length > 18) {
       const old = this.leaves.find((l) => l.landed);
       if (old) { old.g.remove(); this.leaves.splice(this.leaves.indexOf(old), 1); } else return;
@@ -510,11 +531,17 @@ export class Scene {
     g.style.opacity = delay > 0 ? '0' : '1';
     // land in front of Kon's cushion, never behind it
     let landY = 868 + this.rng() * 110;
+    // the breeze carries leaves from the branch out over the garden
+    const vx = (this.rng() * 2 - 1) * 14 - 8 - Math.max(0, x - 1000) * 0.09;
     this.leaves.push({
-      g, x, y, vx: (this.rng() * 2 - 1) * 14 - 8, vy: 0, rot: this.rng() * 360,
+      g, x, y, vx, vy: 0, rot: this.rng() * 360,
       seed: this.rng() * 10, delay, landY, landed: false, landedAt: 0, id: 'leaf' + Math.floor(this.rng() * 1e6),
-      born: this.t,
+      born: this.t, byVisitor,
     });
+  }
+
+  hideSnail() {
+    this.snailHideUntil = this.t + 3.2;
   }
 
   pokeFlower(k = 1) {
@@ -571,10 +598,70 @@ export class Scene {
     this.emit({ type: 'sfx', name: 'chime' });
   }
 
+  /** Kon's sand doodle "while you were away" — placed in open sand in front of the cushion. */
+  rakeDoodle(kind) {
+    const at = this.mode === 'wide' ? { x: 800, y: 968, s: 1 } : { x: 800, y: 882, s: 0.75 };
+    this.rake.doodle(kind, at.x, at.y, at.s);
+    PLACES.doodle = { x: at.x, y: at.y };
+  }
+
+  /** Follow the visitor's local time: dawn, day, dusk or night. */
+  setTimeOfDay(hour) {
+    const night = hour < 5.5 || hour >= 19;
+    const dusk = hour >= 17 && hour < 19;
+    const dawn = hour >= 5.5 && hour < 7.5;
+    document.body.classList.toggle('is-dusk', dusk);
+    document.body.classList.toggle('is-dawn', dawn);
+    if (night && !this.night) {
+      this.night = true;
+      document.body.classList.add('is-night');
+      document.querySelector('meta[name="theme-color"]').setAttribute('content', '#2a2f4a');
+    }
+    return night ? 'night' : dusk ? 'dusk' : dawn ? 'dawn' : 'day';
+  }
+
+  /** At night the cursor becomes a firefly, trailing a little light. */
+  updateCursor(dt, pointer) {
+    const cg = this.cursorGlow;
+    if (!this.night || !pointer.present || pointer.isTouch) {
+      if (cg.on) { $('cursor-firefly').style.display = 'none'; cg.on = false; }
+      return;
+    }
+    if (!cg.built) {
+      const host = $('cursor-firefly');
+      for (let i = 0; i < 6; i++) {
+        const el = make('circle', { r: f2(10 - i * 1.3), fill: 'url(#firefly)' }, host);
+        cg.trail.push({ el, x: pointer.x, y: pointer.y });
+      }
+      cg.built = true;
+    }
+    if (!cg.on) { $('cursor-firefly').style.display = ''; cg.on = true; }
+    let tx = pointer.x, ty = pointer.y;
+    cg.trail.forEach((d, i) => {
+      const k = 1 - Math.exp(-dt * (28 - i * 3.6));
+      d.x += (tx - d.x) * k;
+      d.y += (ty - d.y) * k;
+      d.el.setAttribute('cx', f2(d.x));
+      d.el.setAttribute('cy', f2(d.y));
+      d.el.style.opacity = f2((0.95 - i * 0.13) * (0.8 + 0.2 * Math.sin(this.t * 7 + i)));
+      tx = d.x; ty = d.y;
+    });
+  }
+
   // ------------------------------------------------------------------ per frame
   update(dt) {
     this.t += dt;
     const t = this.t;
+    this.rake.update(dt);
+    // camera follows Kon (critically damped, so it never overshoots)
+    if (this.baseVb) {
+      const w = 2 * Math.PI * 0.45;
+      const target = this.reduced ? Math.round(this.cameraTarget() / 120) * 120 : this.cameraTarget();
+      this.camV += (w * w * (target - this.camX) - 2 * w * this.camV) * dt;
+      this.camX += this.camV * dt;
+      if (this.appliedCamX === null || Math.abs(this.camX - this.appliedCamX) > 0.03) this.applyView();
+      else this.placeCaption();
+    }
     this.updateShishi(dt);
     this.updateMaple(dt);
     this.updateLeaves(dt);
@@ -706,7 +793,7 @@ export class Scene {
       }
       if (!L.landed) {
         const tt = this.t + L.seed;
-        L.vy = lerp(L.vy, 62 + Math.sin(tt * 2.2) * 26, 1 - Math.exp(-dt * 3));
+        L.vy = lerp(L.vy, 84 + Math.sin(tt * 2.2) * 30, 1 - Math.exp(-dt * 3));
         L.x += (L.vx + Math.sin(tt * 1.7) * 38) * dt;
         L.y += L.vy * dt;
         L.rot += Math.sin(tt * 1.3) * 90 * dt;
@@ -805,6 +892,21 @@ export class Scene {
       if (!newest || L.born > newest.born) newest = L;
     }
     if (newest && newest.y > this.vb.y) out.push({ id: newest.id, kind: 'leaf', x: newest.x, y: newest.y, sal: 0.48 });
+    // leaves lying on the sand: not eye-catching, but Kon may go and pounce on one
+    for (const L of this.leaves) {
+      if (L.landed && this.t - L.landedAt < 14 && !L.scattered) out.push({ id: L.id, kind: 'leafGround', x: L.x, y: L.y, sal: 0.05, byVisitor: L.byVisitor });
+    }
     return out;
+  }
+
+  /** Kon landed on a leaf: it flies up and flutters down again a little way off. */
+  scatterLeaf(id) {
+    const L = this.leaves.find((l) => l.id === id);
+    if (!L) return;
+    L.landed = false;
+    L.scattered = true;
+    L.vy = -170;
+    L.vx = (this.rng() * 2 - 1) * 60;
+    L.landY = Math.min(990, L.y + 10 + this.rng() * 30);
   }
 }

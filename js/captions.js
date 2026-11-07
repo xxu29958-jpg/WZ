@@ -43,4 +43,50 @@ export const CAPTIONS = {
   night: ['Night falls on the garden.', 'Kon pretends not to be afraid of the dark.'],
   day: ['Morning, already?', 'The sun is back. So is Kon.'],
   leave: ['Where did you go?', 'Kon is not waiting for you.'],
+
+  // the stillness test
+  zazenStart: ['…is anyone there?', 'It is very quiet. Suspiciously quiet.'],
+  temptWave: ['Hello? Anyone there?', 'Kon is waving. At nobody. Probably.'],
+  temptFaces: ['Kon is making faces. Stay strong.', 'Do not laugh. Do not move.'],
+  temptPeekaboo: ['Peekaboo? …Peekaboo?', 'Kon is testing you.'],
+  temptDance: ['Kon is doing a little dance. For no one.', 'A dance. To lure you out.'],
+  gotcha: ['Ha! Kon knew you were there.', 'Gotcha. Kon wins this round.'],
+  zazenSettle: ['Kon is truly meditating now. Don’t move.', 'Real zen. For once. Stay still.'],
+  zazenHalf: ['The brush is painting by itself…', 'Shh. Don’t breathe so loudly.'],
+  zazenAlmost: ['Almost…', 'Don’t. Move.'],
+  zazenBroken: ['So close.', 'The ink evaporates. Kon sighs.', 'Next time, perhaps.'],
+  satori: ['Satori.', 'Enlightenment.'],
+  satoriEnd: ['Satori lasted four seconds. A personal best.', 'Enlightenment: briefly achieved.'],
+
+  // judging the sand
+  judgeLook: ['Kon inspects your ensō.', 'Hmm.'],
+  judgeGreat: ['A true ensō. Kon bows.', 'Kon has nothing to teach you.'],
+  judgeGood: ['Not bad. Kon has seen better (Kon’s own).', 'Respectable.'],
+  judgeMeh: ['…Interesting.', 'Kon will pretend that is a circle.'],
+  spiral: ['Kon followed your spiral.', 'Round and round and round.'],
+
+  // the time of day
+  lateNight: ['It’s late. Kon is surprised you’re awake.', 'A night visitor. Kon lit the lantern for you.'],
+  dusk: ['Evening falls on the garden.', 'Dusk. The lantern is warming up.'],
+  dawn: ['An early visitor. Kon is barely awake.', 'Dawn. The sand is cold.'],
+
+  // a life in the garden
+  lifeDrink: ['Kon is having a drink.', 'Sip. Sip. Sip.'],
+  lifeLantern: ['Kon checks on the lantern.', 'Kon warms its paws at the lantern.'],
+  lifeSnail: ['Kon has found the snail again.', 'Kon and the snail have an understanding.'],
+  lifeRack: ['Kon reads other people’s wishes. For research.', 'So many wishes.'],
+  lifeShishi: ['Kon is waiting for the bamboo to tip.', 'Any moment now…'],
+  lifeShishiClack: ['TOK! Kon jumps. Every single time.', 'It got Kon again.'],
+  lifeRock: ['Kon is sunbathing on the warm rock.', 'The rock is warm. Kon approves.'],
+  lifeMaple: ['Kon is counting leaves.', 'One leaf. Two leaves. Many leaves.'],
+  lifeSniff: ['Kon smells something interesting.', 'Kon is investigating the sand.'],
+  lifeHome: ['Kon returns to the cushion.', 'Back to practice.'],
+  homeForZen: ['Kon heads back to the cushion. Something feels quiet.', 'The garden is still. Kon goes home.'],
+  homeForSleep: ['Kon shuffles home for a nap.', 'Yawn. Kon heads for the cushion.'],
+  typingWalk: ['Kon wanders over. Casually.', 'Kon happens to be passing by.'],
+  stalk: ['Kon is hunting.', 'Something small is moving in the sand…'],
+  pounce: ['POUNCE.', 'Hup!'],
+  pounceMiss: ['Nothing there. Kon meant to do that.', 'Kon was only stretching.'],
+  pounceLeaf: ['Kon caught a leaf. Briefly.', 'The leaf escapes. Kon is delighted.'],
+  judgeWalk: ['Kon goes to look at your circle.', 'Kon will be the judge of that.'],
 };

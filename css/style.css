@@ -178,7 +178,7 @@ html, body {
 .leaf-vein { fill: none; stroke: rgba(58,36,23,.35); stroke-width: 1; }
 
 /* Kon */
-.kon-shadow { fill: #1f2546; opacity: .26; }
+.kon-shadow { fill: url(#shadow-grad); }
 .toes { fill: none; stroke: #7b5644; stroke-width: 2; stroke-linecap: round; }
 .ear-fluff { fill: none; stroke: #fff4e2; stroke-width: 2; stroke-linecap: round; opacity: .9; }
 .bib-trim { fill: none; stroke: #ffd3c4; stroke-width: 2; stroke-dasharray: 2 5; stroke-linecap: round; }
@@ -531,3 +531,109 @@ html, body {
 .frozen *, .frozen *::before, .frozen *::after { transition: none !important; animation: none !important; }
 .demo-cursor { position: absolute; left: 0; top: 0; z-index: 70; pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0,0,0,.35)); }
 .demo-cursor[hidden] { display: none; }
+
+/* ================================================================
+   Stillness, sand and memory
+   ================================================================ */
+
+/* raked grooves */
+#sand-canvas {
+  position: absolute;
+  left: 0; top: 0;
+  pointer-events: none;
+  transform-origin: 0 0;
+}
+
+/* the ensō fades back while a new one is painted live */
+#enso { transition: opacity 1.4s ease; }
+.zazen #enso { opacity: .14; }
+#enso-live { opacity: 1; transition: opacity .9s ease, filter 1.6s ease; }
+#enso-live.fading { opacity: 0; }
+#enso-live.gold {
+  filter: drop-shadow(0 0 10px rgba(255, 196, 90, .6));
+}
+
+/* spirit brush */
+.brush-handle { fill: #c9a46a; }
+.brush-node { stroke: #9b7a45; stroke-width: 2; }
+.brush-ferrule { fill: #6b4a2e; }
+.brush-tip { fill: #2a1d16; }
+
+/* aura and rising motes */
+.aura-ring { fill: none; stroke: #ffcf6e; stroke-width: 3; }
+.aura-core { fill: url(#window-glow); opacity: .0; }
+.mote { fill: #ffe39a; }
+
+/* score card */
+.c-sign { fill: #f3dcb2; }
+.sign-stick { stroke: #8d5b3b; stroke-width: 4; stroke-linecap: round; }
+.sign-grain { stroke: #d9bb8a; stroke-width: 1.6; stroke-linecap: round; }
+.sign-text { font-family: var(--font-hand); font-weight: 700; font-size: 30px; fill: var(--red-deep); }
+
+/* satori seal */
+.satori-seal {
+  position: absolute;
+  left: 0; top: 0;
+  z-index: 7;
+  width: calc(62px * var(--ui-scale, 1));
+  height: calc(62px * var(--ui-scale, 1));
+  border-radius: 7px;
+  background: var(--red);
+  color: #fff3e6;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-brush);
+  line-height: 1;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 3px rgba(255, 243, 230, .22), 0 2px 0 rgba(58, 36, 23, .25);
+  transform-origin: 50% 50%;
+}
+.satori-seal[hidden] { display: none; }
+.satori-kanji { font-size: calc(36px * var(--ui-scale, 1)); }
+.satori-count {
+  position: absolute;
+  right: -10px; bottom: -14px;
+  font-family: var(--font-display);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--red-deep);
+  background: var(--paper);
+  border: 1.5px solid var(--red-deep);
+  border-radius: 10px;
+  padding: 1px 6px;
+}
+.satori-count:empty { display: none; }
+.satori-seal.stamp { animation: seal-stamp .5s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes seal-stamp {
+  0% { opacity: 0; transform: var(--seal-pos) scale(2.4) rotate(-14deg); }
+  60% { opacity: 1; transform: var(--seal-pos) scale(.92) rotate(-7deg); }
+  100% { opacity: 1; transform: var(--seal-pos) scale(1) rotate(-8deg); }
+}
+
+/* dusk and dawn */
+#tint {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  opacity: 0;
+  transition: opacity 2s ease, background-color 2s ease;
+}
+.is-dusk #tint { background: #ef9a55; opacity: .24; }
+.is-dawn #tint { background: #f1a7b4; opacity: .15; }
+.is-dusk .lantern-window { fill: #ffcf6b; }
+.is-dusk #glow-world > #lantern-halo,
+.is-dusk #glow-world > #lantern-window-lit,
+.is-dusk #glow-world > .lantern-mullion { opacity: .75; }
+.is-night #glow-world > #cursor-firefly { opacity: 1; }
+#cursor-firefly circle { mix-blend-mode: screen; }
+
+@media (prefers-reduced-motion: reduce) {
+  .satori-seal.stamp { animation-duration: .01s; }
+  #enso-live, #enso, #tint { transition-duration: .3s; }
+}
+
+/* legs (visible when Kon stands up) */
+.leg-ol { fill: none; stroke: var(--ink); stroke-width: 17; stroke-linecap: round; }
+.leg-fill { fill: none; stroke: var(--sock); stroke-width: 11; stroke-linecap: round; }
+.paw-print { fill: rgba(176, 150, 108, .55); }

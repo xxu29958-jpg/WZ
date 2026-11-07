@@ -1,0 +1,12 @@
+<!doctype html>
+<!-- Test harness: shows a page in an iframe of an exact viewport size (?w=390&h=844&src=/). -->
+<meta charset="utf-8">
+<style>html, body { margin: 0; background: #222; overflow: hidden; } iframe { position: absolute; left: 0; top: 0; border: 0; display: block; }</style>
+<iframe id="f"></iframe>
+<script>
+  const q = new URLSearchParams(location.search);
+  const f = document.getElementById('f');
+  f.style.width = (q.get('w') || 390) + 'px';
+  f.style.height = (q.get('h') || 844) + 'px';
+  f.src = q.get('src') || '/';
+</script>
