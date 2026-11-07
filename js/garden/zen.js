@@ -38,9 +38,8 @@ export class ZenFX {
 
   layout() {
     const sc = this.scene;
-    const e = sc.toScreen(530, 330);
+    const e = sc.baseToScreen(530, 330); // inside the moving world layer
     this.live.style.transform = `translate(${f2(e.x)}px, ${f2(e.y)}px) scale(${(540 * sc.scale / this.live.width).toFixed(4)})`;
-    this.placeSeal();
   }
 
   placeSeal() {

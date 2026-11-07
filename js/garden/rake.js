@@ -59,7 +59,7 @@ export class SandRake {
   place() {
     const sc = this.scene;
     if (!this.res || !sc.vb) return;
-    const p = sc.toScreen(AREA.x, AREA.y);
+    const p = sc.baseToScreen(AREA.x, AREA.y); // inside the moving world layer
     this.cv.style.transform = `translate(${p.x.toFixed(2)}px, ${p.y.toFixed(2)}px) scale(${(sc.scale / this.res).toFixed(5)})`;
   }
 

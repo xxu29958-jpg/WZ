@@ -73,14 +73,31 @@ html, body {
   -webkit-user-select: none;
 }
 
-#scene, #scene-back, #glow {
+/* Every layer is a little wider than the screen (the camera's range) and is
+   slid with a composited transform, so panning never redraws static art. */
+#scene, #scene-back, #glow, .far-layer {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   display: block;
 }
-#scene-back, #glow { pointer-events: none; }
+#scene-back, #glow, .far-layer { pointer-events: none; }
+#world-layers {
+  position: absolute;
+  inset: 0;
+}
+#world-layers, #glow, .far-layer { will-change: transform; }
+#layer-maple {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;   /* only the branch itself catches the pointer */
+  will-change: transform;
+}
+#layer-maple #maple { pointer-events: auto; }
 
 .layer-canvas {
   position: absolute;
@@ -89,16 +106,7 @@ html, body {
   transform-origin: 0 0;
 }
 
-.grain {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  mix-blend-mode: multiply;
-  opacity: .5;
-  z-index: 50;
-}
+.paper-grain { opacity: .34; pointer-events: none; }
 
 /* ---------- SVG paint classes ---------- */
 .ink { stroke: var(--ink); stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }

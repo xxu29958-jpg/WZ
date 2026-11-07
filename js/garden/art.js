@@ -10,43 +10,6 @@ export const LEAF_COLORS = ['#e2483a', '#ec6a3a', '#f08a3c', '#e9a13a', '#d6402e
 
 export class GardenArt {
   // ------------------------------------------------------------------ generated art
-  buildPaper() {
-    const c = document.createElement('canvas');
-    c.width = c.height = 256;
-    const g = c.getContext('2d');
-    const img = g.createImageData(256, 256);
-    const rng = makeRng(7);
-    for (let i = 0; i < img.data.length; i += 4) {
-      const v = 200 + rng() * 55;
-      img.data[i] = v;
-      img.data[i + 1] = v * 0.97;
-      img.data[i + 2] = v * 0.92;
-      img.data[i + 3] = rng() < 0.5 ? 20 : 8;
-    }
-    g.putImageData(img, 0, 0);
-    // a few paper fibres
-    g.strokeStyle = 'rgba(120, 90, 60, .08)';
-    g.lineWidth = 0.8;
-    for (let i = 0; i < 70; i++) {
-      const x = rng() * 256, y = rng() * 256, a = rng() * TAU, l = 6 + rng() * 18;
-      g.beginPath();
-      g.moveTo(x, y);
-      g.quadraticCurveTo(x + Math.cos(a + 0.4) * l * 0.5, y + Math.sin(a + 0.4) * l * 0.5, x + Math.cos(a) * l, y + Math.sin(a) * l);
-      g.stroke();
-    }
-    this.grainTile = c;
-  }
-
-  paintGrain(W, H) {
-    const cv = $('grain');
-    if (!cv || (cv.width === W && cv.height === H)) return;
-    cv.width = W;
-    cv.height = H;
-    const g = cv.getContext('2d');
-    g.fillStyle = g.createPattern(this.grainTile, 'repeat');
-    g.fillRect(0, 0, W, H);
-  }
-
   buildSky() {
     const host = $('sky');
     const ridge = (seed, base, amp, cls, step = 30) => {

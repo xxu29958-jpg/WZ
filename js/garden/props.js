@@ -329,14 +329,24 @@ export class GardenProps {
   updateMaple(dt) {
     const sk = this.mapleShake.step(dt, 0);
     const t = this.t;
+    // the gentle sway is a rotation of the whole layer: composited, never redrawn
     const sway = Math.sin(t * 0.55) * 0.35 + sk * 1.6;
-    $('maple-sway').setAttribute('transform', `rotate(${f2(sway)} 1760 -60)`);
-    if (this.reduced) return;
+    $('layer-maple').style.transform = `rotate(${sway.toFixed(3)}deg)`;
+    // single leaves only flutter while the branch is actually being shaken
+    if (this.reduced || (Math.abs(sk) < 0.01 && Math.abs(this.mapleShake.v) < 0.05)) {
+      if (this.mapleFluttering) {
+        this.mapleFluttering = false;
+        for (const L of this.mapleLeaves) L.g.setAttribute('transform', `translate(${f2(L.x)} ${f2(L.y)}) rotate(${f2(L.rot)})`);
+      }
+      return;
+    }
+    this.mapleFluttering = true;
     for (const L of this.mapleLeaves) {
       const r = L.rot + Math.sin(t * 1.6 + L.seed) * 4 + sk * 14 * Math.sin(L.seed * 3);
       L.g.setAttribute('transform', `translate(${f2(L.x)} ${f2(L.y)}) rotate(${f2(r)})`);
     }
   }
+
 
   updateLeaves(dt) {
     for (let i = this.leaves.length - 1; i >= 0; i--) {
