@@ -100,6 +100,27 @@ html, body {
   will-change: transform;
 }
 #layer-maple #maple { pointer-events: auto; }
+.near {
+  position: absolute;
+  pointer-events: none;
+  overflow: visible;
+  will-change: transform;
+}
+.near-blade { fill: #4f5a32; }
+.near-plume { fill: #d8c9a6; }
+.near-leaf { stroke: none; }
+.near-twig { fill: none; stroke: #3f2a20; stroke-width: 9; stroke-linecap: round; }
+#lens-leaf {
+  position: absolute;
+  left: 0; top: 0;
+  width: 240px; height: 240px;
+  pointer-events: none;
+  display: none;
+  will-change: transform;
+  filter: blur(5px);
+  opacity: .88;
+}
+#lens-leaf svg { width: 100%; height: 100%; display: block; }
 
 .layer-canvas {
   position: absolute;
@@ -183,6 +204,8 @@ html, body {
 .hill-side { fill: var(--slope0, #97ae9e); }
 .torii-path { fill: none; stroke: #e2d6bc; stroke-width: 2.4; stroke-linecap: round; opacity: .55; }
 .torii { fill: #d0482f; }
+.boat { fill: #3b3236; }
+.wake { opacity: .45; }
 .canopy-far { fill: var(--slope0, #97ae9e); }
 .canopy-mid { fill: var(--slope1, #729077); }
 .canopy-near { fill: var(--slope2, #557558); }

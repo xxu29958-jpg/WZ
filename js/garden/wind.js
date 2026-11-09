@@ -76,6 +76,36 @@ export class GardenWind {
     }
     // curls of wind, drawn through the air like brush strokes
     for (let i = 0; i < 3; i++) this.windCurl(0.15 + i * 0.45 + this.rng() * 0.2);
+    // and sometimes one leaf comes tumbling right past the lens
+    if (this.rng() < 0.55 && this.sky.p.stars < 0.3) this.lensAt = this.t + 0.7 + this.rng() * 0.6;
+  }
+
+  /** A big, out-of-focus leaf tumbling past the camera, from the top right across and down. */
+  lensLeaf() {
+    const el = $('lens-leaf');
+    if (!el.firstChild) {
+      const { d, v } = this.leafPath(52);
+      el.innerHTML = `<svg viewBox="-64 -64 128 128"><path d="${d}" fill="#cf5530"/><path d="${v}" fill="none" stroke="rgba(90,30,15,.5)" stroke-width="2.4"/></svg>`;
+    }
+    const W = this.W, H = this.H;
+    const size = Math.max(160, Math.min(W, H) * 0.32);
+    el.style.width = el.style.height = `${f2(size)}px`;
+    this.lens = { t: 0, dur: 2.6, size, x0: W * (0.75 + this.rng() * 0.2), y0: -size * 0.8, x1: W * (0.1 + this.rng() * 0.3), y1: H + size * 0.2, spin: (this.rng() < 0.5 ? -1 : 1) * (200 + this.rng() * 160) };
+    el.style.display = 'block';
+  }
+
+  updateLens(dt) {
+    if (this.lensAt && this.t > this.lensAt) { this.lensAt = 0; this.lensLeaf(); }
+    const L = this.lens;
+    if (!L) return;
+    L.t += dt;
+    const u = clamp(L.t / L.dur);
+    const e = u * u * (3 - 2 * u);
+    const x = lerp(L.x0, L.x1, e) + Math.sin(u * 7) * L.size * 0.35;
+    const y = lerp(L.y0, L.y1, u) - Math.sin(u * 7 + 1) * L.size * 0.08;
+    const flip = Math.cos(u * 9);
+    $('lens-leaf').style.transform = `translate(${f2(x - L.size / 2)}px, ${f2(y - L.size / 2)}px) rotate(${f2(L.spin * u)}deg) scale(${f2(1)}, ${f2(0.35 + 0.65 * Math.abs(flip))})`;
+    if (u >= 1) { this.lens = null; $('lens-leaf').style.display = 'none'; }
   }
 
   windCurl(delay) {
@@ -122,6 +152,7 @@ export class GardenWind {
       if (this.autoGusts) this.gust(0.7 + this.rng() * 0.5);
     }
     this.wind = wind;
+    this.updateLens(dt);
 
     // pampas grass: a slow sway, bowing to the left in a gust
     for (const st of this.susuki || []) {

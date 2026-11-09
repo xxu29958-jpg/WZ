@@ -356,7 +356,38 @@ export class Light {
     };
     if (night > 0 && p.moon.up) path(p.moon, [255, 244, 214], 0.75 * night);
     if (p.sun.up && p.sun.alt < 0.4 && p.rays > 0.2) path(p.sun, p.glow, 0.5 * p.rays * (1 - smoothstep(0.25, 0.4, p.sun.alt)));
+    // a flock of birds far off, wings beating, in a loose V
+    const F = sc.flock;
+    if (F) {
+      c.globalCompositeOperation = 'source-over';
+      c.strokeStyle = 'rgba(52,46,58,0.55)';
+      c.lineWidth = Math.max(1, 1.5 * S);
+      c.lineCap = 'round';
+      c.beginPath();
+      for (const b of F.birds) {
+        const q = sc.farToStage(F.x + b.dx, F.y + b.dy, 0.25);
+        const x = q.x * k, y = q.y * k;
+        const s = 4.2 * S;
+        const flap = Math.sin(t * 9 + b.ph);
+        c.moveTo(x - s, y - flap * s * 0.7);
+        c.quadraticCurveTo(x - s * 0.4, y - s * 0.4, x, y);
+        c.quadraticCurveTo(x + s * 0.4, y - s * 0.4, x + s, y - flap * s * 0.7);
+      }
+      c.stroke();
+      c.globalCompositeOperation = 'lighter';
+    }
     if (night <= 0) return;
+    // the boat carries a lantern (unless it's behind Kon)
+    const B = sc.boat;
+    if (B && !(sc.konAt && Math.abs(sc.konAt.x - B.x) < 170)) {
+      const [x, y] = at(B.x + B.dir * 7, B.y - 5);
+      const r = 6 * S + 2;
+      c.globalAlpha = night * 0.95;
+      c.drawImage(this.lampSprite, x - r, y - r, r * 2, r * 2);
+      c.globalAlpha = 1;
+      c.fillStyle = rgba([255, 205, 130], 0.35 * night);
+      c.fillRect(x - 0.6, y + 6 * S, 1.2, 9 * S);
+    }
     // windows in the village, and their reflections (someone goes to bed now and then)
     const R = 7 * S + 2;
     for (const v of sc.village || []) {

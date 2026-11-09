@@ -84,6 +84,13 @@ export class GardenVista {
     svgEl('path', { d: `M ${TX - 24},${TY + 1} h 48`, class: 'lake-hi ripple' }, host);
     this.lakeTorii = { x: TX, y: TY - TS * 0.6 };
 
+    // a little boat, drifting along the far side of the lake
+    const boat = svgEl('g', { id: 'boat' }, host);
+    svgEl('path', { d: 'M -11,0 L 11,0 L 8,3.4 L -8,3.4 Z M -3,-0.2 L -3,-9 L 4,-1.5 Z', class: 'boat' }, boat);
+    svgEl('path', { d: 'M -10,5 L 10,5 L 7,7.5 L -7,7.5 Z', class: 'boat lake-mirror' }, boat);
+    svgEl('path', { d: 'M -26,2.6 h 12 M 14,2.6 h 9', class: 'lake-hi wake' }, boat);
+    this.boat = { el: boat, x: 470, y: 440, dir: 1, drawn: null };
+
     // autumn hills down either side of the lake, forested in green, gold and red
     const leftTop = (x) => SHORE + 66 - 150 * (1 - smoothstep(-200, 520, x)) - Math.abs(noise1(x * 0.03, 4)) * 10;
     const rightTop = (x) => SHORE + 70 - 160 * smoothstep(1080, 1800, x) - Math.abs(noise1(x * 0.03, 6)) * 10;
@@ -175,6 +182,92 @@ export class GardenVista {
     svgEl('path', { d: blobs(nearAccent.gold), class: 'canopy-gold near' }, host);
     svgEl('path', { d: blobs(nearAccent.red), class: 'canopy-red near' }, host);
     svgEl('path', { d: blobs(tones.litNear), class: 'canopy-hi' }, host);
+  }
+
+  /** Right in front of the lens, out of focus: tall grass at the bottom left, maple leaves at the bottom right. */
+  buildNear() {
+    const rng = makeRng(83);
+    const L = $('near-left'), R = $('near-right');
+    // (local coordinates: the corner is at 0,0)
+    let blades = '';
+    for (let i = 0; i < 7; i++) {
+      const bx = -30 + i * 22 + rng() * 14;
+      const tipX = 40 + i * 26 + rng() * 50, tipY = -(120 + rng() * 120);
+      const w = 9 + rng() * 6;
+      blades += `M ${f2(bx)},40 Q ${f2(bx + 10)},${f2(tipY * 0.55)} ${f2(tipX)},${f2(tipY)} Q ${f2(bx + 10 + w * 2)},${f2(tipY * 0.5)} ${f2(bx + w)},40 Z `;
+    }
+    svgEl('path', { d: blades, class: 'near-blade' }, L);
+    let plumes = '';
+    for (const [x, y, s] of [[118, -224, 0.9], [176, -190, 0.7]]) {
+      plumes += `M ${x},${y} C ${x - 14 * s},${y - 50 * s} ${x - 4 * s},${y - 96 * s} ${x - 30 * s},${y - 120 * s} C ${x + 12 * s},${y - 92 * s} ${x + 22 * s},${y - 46 * s} ${x + 10 * s},${y} Z `;
+    }
+    svgEl('path', { d: plumes, class: 'near-plume' }, L);
+    svgEl('path', { d: 'M 60,60 C -20,-40 -120,-120 -200,-150', class: 'near-twig' }, R);
+    const colors = ['#c4462e', '#d8692f', '#e08a34', '#b83c2a'];
+    for (let i = 0; i < 6; i++) {
+      const u = i / 5;
+      const x = lerp(10, -170, u) + (rng() - 0.5) * 40, y = lerp(30, -150, u) + (rng() - 0.5) * 50;
+      const g = this.makeLeaf(R, 46 + rng() * 22, colors[i % colors.length]);
+      g.setAttribute('transform', `translate(${f2(x)} ${f2(y)}) rotate(${f2(rng() * 360)})`);
+      g.querySelector('.leaf').classList.add('near-leaf');
+    }
+  }
+
+  /** Life down in the valley: the boat drifts, and now and then a flock of birds crosses the sky. */
+  updateValley(dt) {
+    const B = this.boat;
+    if (B) {
+      B.x += B.dir * 6 * dt;
+      if (B.x > 610) B.dir = -1;
+      if (B.x < 400) B.dir = 1;
+      if (B.drawn === null || Math.abs(B.x - B.drawn) > 0.3) {
+        B.drawn = B.x;
+        B.el.setAttribute('transform', `translate(${f2(B.x)} ${f2(B.y)}) scale(${B.dir} 1)`);
+      }
+    }
+    // birds: by day, every minute or two, a loose V heading across (toward home at dusk)
+    const p = this.sky.p;
+    if (this.flock) {
+      const F = this.flock;
+      F.t += dt;
+      F.x += F.dir * 46 * dt;
+      if (F.t > 40) this.flock = null;
+    } else if (p.stars < 0.3 && !this.reduced) {
+      if (this.nextFlockAt === undefined) this.nextFlockAt = this.t + 25 + this.rng() * 30;
+      if (this.t > this.nextFlockAt) {
+        this.nextFlockAt = this.t + 70 + this.rng() * 80;
+        if (this.autoGusts) this.spawnFlock();
+      }
+    }
+  }
+
+  spawnFlock() {
+    const dir = this.rng() < 0.5 ? 1 : -1;
+    const b = this.baseVb;
+    const n = 5 + Math.floor(this.rng() * 4);
+    const birds = [];
+    for (let i = 0; i < n; i++) {
+      const row = Math.ceil(i / 2), side = i % 2 ? 1 : -1;
+      birds.push({ dx: -dir * row * 15 + (this.rng() - 0.5) * 5, dy: side * row * 7 + (this.rng() - 0.5) * 4, ph: this.rng() * 6 });
+    }
+    this.flock = { x: dir > 0 ? b.x - 120 : b.x + b.w + 120, y: 300 + this.rng() * 60, dir, t: 0, birds };
+  }
+
+  /** Pin the out-of-focus corners to the screen's bottom corners (wide screens only: phones need that space). */
+  placeNear() {
+    // each corner is its own small layer (a whole-screen layer would cost a whole screen to blend)
+    const S = this.scale, wide = this.mode === 'wide';
+    const box = 440; // world units around each corner
+    const px = Math.ceil(box * S);
+    for (const [id, gid, left, ox, oy] of [['near-l', 'near-left', true, -20, 10], ['near-r', 'near-right', false, 30, 20]]) {
+      const el = $(id);
+      el.style.display = wide ? '' : 'none';
+      el.setAttribute('viewBox', left ? `0 ${-box} ${box} ${box}` : `${-box} ${-box} ${box} ${box}`);
+      el.style.width = el.style.height = `${px}px`;
+      el.style.left = left ? '0px' : `${this.W - px}px`;
+      el.style.top = `${this.H - px}px`;
+      $(gid).setAttribute('transform', `translate(${ox} ${oy})`);
+    }
   }
 
   /** The back edge of the terrace: a low stone border, round-pruned shrubs, an old pine. */

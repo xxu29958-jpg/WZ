@@ -82,10 +82,6 @@
   <svg id="layer-kasumi" class="far-layer" viewBox="0 0 1600 1000" aria-hidden="true">
       <g id="kasumi"></g>
   </svg>
-  <!-- the terrace's back edge: an old pine, round-pruned shrubs, a stone border -->
-  <svg id="layer-terrace" class="far-layer" viewBox="0 0 1600 1000" aria-hidden="true">
-      <g id="terrace"></g>
-  </svg>
 
   <!-- everything on the ground moves together with the camera -->
   <div id="world-layers">
@@ -101,6 +97,8 @@
       <feColorMatrix type="matrix" values="0 0 0 0 0.30  0 0 0 0 0.21  0 0 0 0 0.13  0 0 0 -2.2 1.32"/>
     </filter>
     </defs>
+      <!-- the terrace's back edge: an old pine, round-pruned shrubs, a stone border (js/garden/vista.js) -->
+      <g id="terrace"></g>
       <!-- raked sand: base, generated rake lines and ripple rings -->
       <g id="sand" aria-hidden="true">
         <rect x="-1500" y="700" width="4600" height="1800" class="c-sand"/>
@@ -493,6 +491,10 @@
 
   </svg>
 
+  <!-- right in front of the lens, out of focus: pampas grass and maple leaves at the corners -->
+  <svg id="near-l" class="near" aria-hidden="true"><defs><filter id="dof" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6"/></filter></defs><g id="near-left" filter="url(#dof)"></g></svg>
+  <svg id="near-r" class="near" aria-hidden="true"><g id="near-right" filter="url(#dof)"></g></svg>
+
   <!-- the light of the hour, multiplied over the garden (js/garden/light.js) -->
   <canvas id="shade" aria-hidden="true"></canvas>
   <!-- the night sky shines through: stars, the Milky Way and the moon, above the hills only -->
@@ -559,6 +561,8 @@
 
   <!-- shafts of sunlight and floating dust, screened over everything -->
   <canvas id="sunlight" aria-hidden="true"></canvas>
+  <!-- now and then a leaf tumbles right past the lens -->
+  <div id="lens-leaf" aria-hidden="true"></div>
   </div>
 
   <!-- branding -->

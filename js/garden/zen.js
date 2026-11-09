@@ -46,8 +46,12 @@ export class ZenFX {
     const sc = this.scene;
     const p = sc.mode === 'wide' ? sc.toScreen(1032, 392) : sc.toScreen(1000, 372);
     const ui = sc.mode === 'wide' ? clamp(sc.scale, 0.8, 1.3) : 0.8;
-    this.seal.style.setProperty('--ui-scale', ui.toFixed(3));
+    if (this.sealUi !== ui) { this.sealUi = ui; this.seal.style.setProperty('--ui-scale', ui.toFixed(3)); }
     const half = 31 * ui;
+    // (called every frame now that the camera moves: only touch the styles when something changed)
+    const key = `${f2(p.x - half)},${f2(p.y - half)},${ui.toFixed(3)}`;
+    if (key === this.sealKey) return;
+    this.sealKey = key;
     this.seal.style.setProperty('--seal-pos', `translate(${f2(p.x - half)}px, ${f2(p.y - half)}px)`);
     this.seal.style.transform = `translate(${f2(p.x - half)}px, ${f2(p.y - half)}px) rotate(-8deg)`;
   }

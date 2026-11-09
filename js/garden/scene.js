@@ -20,7 +20,7 @@ export { PLACES };
 
 // How deep each layer is (0: as far as the sky, 1: the ground Kon stands on, more: nearer than that).
 // The camera's pan, the pointer's parallax, the tilt and the breathing drift all scale with it.
-const DEPTH = { hills: 0.22, stars: 0.22, kasumi: 0.32, valley: 0.4, terrace: 0.85 };
+const DEPTH = { hills: 0.22, stars: 0.22, kasumi: 0.32, valley: 0.4 };
 const LOOK = { x: 26, y: 14 };     // how far (px) the pointer's parallax shifts the sky
 const OVERSCAN = 120;              // extra sky above and below the screen, for the tilt
 
@@ -92,6 +92,7 @@ export class Scene {
     this.buildSky();
     this.buildValley();
     this.buildTerrace();
+    this.buildNear();
     this.buildKasumi();
     this.buildStars();
     this.light = new Light({ shade: $('shade'), sun: $('sunlight'), scene: this, reduced: reducedMotion });
@@ -126,7 +127,7 @@ export class Scene {
     this.camFocus = null;
     this.stage = $('stage');
     this.worldLayers = $('world-layers');
-    this.farLayers = { hills: $('layer-hills'), valley: $('layer-valley'), kasumi: $('layer-kasumi'), terrace: $('layer-terrace'), stars: $('layer-stars') };
+    this.farLayers = { hills: $('layer-hills'), valley: $('layer-valley'), kasumi: $('layer-kasumi'), stars: $('layer-stars') };
     this.layers = [this.back, this.svg, this.glow, ...Object.values(this.farLayers)];
     this.appliedCamX = null;
     this.captionW = 300;
@@ -218,6 +219,7 @@ export class Scene {
       this.zen.layout();
       this.rake.place();
       this.placeMaple();
+      this.placeNear();
       this.viewDirty = false;
     }
     this.applyCamera();
@@ -236,25 +238,40 @@ export class Scene {
     if (!this.baseVb) return;
     const S = this.scale;
     const px = -this.camX * S;
-    const at = (k, extraX = 0) => {
-      const d = this.shiftAt(k);
-      return `translate3d(${f2(px * k + d.x + extraX)}px, ${f2(d.y)}px, 0)`;
+    // (whole pixels, written only when they change: a layer nudged by a fraction of a pixel
+    // every frame costs a lot to composite where there's no GPU, and nobody can see it)
+    const place = (el, x, y, extra = '') => {
+      const v = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)${extra}`;
+      if (el._t !== v) { el._t = v; el.style.transform = v; }
     };
-    this.worldLayers.style.transform = at(1);
-    this.glow.style.transform = at(1);
+    const at = (el, k, extraX = 0) => {
+      const d = this.shiftAt(k);
+      place(el, px * k + d.x + extraX, d.y);
+    };
+    // the ground itself follows the camera smoothly (Kon walks on it)
+    const w = `translate3d(${f2(px)}px, ${f2(this.tilt)}px, 0)`;
+    if (this.worldLayers._t !== w) { this.worldLayers._t = w; this.worldLayers.style.transform = w; this.glow.style.transform = w; }
     for (const [name, el] of Object.entries(this.farLayers)) {
-      if (name === 'kasumi') continue;
-      el.style.transform = at(DEPTH[name]);
+      if (name !== 'kasumi') at(el, DEPTH[name]);
     }
     // the mist bands also drift back and forth on their own
     const drift = this.reduced ? 0 : (Math.sin(this.t * 0.045) * 60 + Math.sin(this.t * 0.118 + 1) * 14) * S;
-    this.farLayers.kasumi.style.transform = at(DEPTH.kasumi, drift);
+    at(this.farLayers.kasumi, DEPTH.kasumi, drift);
     // the maple is nearer than the ground: it moves the other way, and sways
     const m = this.shiftAt(1.3);
-    $('layer-maple').style.transform = `translate3d(${f2(m.x)}px, ${f2(m.y)}px, 0) rotate(${(this.mapleSwayDeg || 0).toFixed(3)}deg)`;
+    place($('layer-maple'), m.x, m.y, ` rotate(${(this.mapleSwayDeg || 0).toFixed(2)}deg)`);
+    // the out-of-focus corners are nearer still
+    const n = this.shiftAt(1.5);
+    place($('near-l'), px * 0.3 + n.x, n.y);
+    place($('near-r'), px * 0.3 + n.x, n.y);
     const z = this.zoom;
-    this.stage.style.transformOrigin = `${f2(this.zoomO.x)}px ${f2(this.zoomO.y)}px`;
-    this.stage.style.transform = z > 1.0005 ? `scale(${z.toFixed(4)})` : '';
+    const zt = z > 1.0005 ? `scale(${z.toFixed(4)})` : '';
+    const zo = zt ? `${f2(this.zoomO.x)}px ${f2(this.zoomO.y)}px` : '';
+    if (this.stage._t !== zt + zo) {
+      this.stage._t = zt + zo;
+      if (zt) this.stage.style.transformOrigin = zo;
+      this.stage.style.transform = zt;
+    }
     // things pinned to the garden follow it
     if (this.mode === 'wide' && this.emaPos) {
       const a = this.toScreen(1300, 646);
@@ -562,6 +579,7 @@ export class Scene {
     }
     this.updateWind(dt);
     this.updateNight(dt);
+    this.updateValley(dt);
     this.updateProps(dt);
     this.light.update(dt, this.sky.p, {
       kon: this.konAt, fireflies: this.fireflies, sway: this.mapleSwayDeg, lampFlicker: this.lampFlicker, wind: this.wind,
