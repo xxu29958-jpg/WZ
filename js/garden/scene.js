@@ -12,6 +12,7 @@ import { GardenArt } from './art.js';
 import { GardenProps } from './props.js';
 import { Sky } from './sky.js';
 import { Light } from './light.js';
+import { GardenWind } from './wind.js';
 
 export { PLACES };
 
@@ -67,7 +68,11 @@ export class Scene {
     this.dark = false;
     this.lampFlicker = 1;
     this.mapleSwayDeg = 0;
+    // wind: a breeze, and gusts now and then (main.js turns the automatic ones off for tests)
     this.wind = 0;
+    this.gustNow = null;
+    this.autoGusts = true;
+    this.nextGustAt = 22 + rng() * 20;
     this.buildSky();
     this.buildKasumi();
     this.buildStars();
@@ -75,6 +80,7 @@ export class Scene {
     this.buildEnso();
     this.buildSand();
     this.buildMaple();
+    this.buildSusuki();
     this.buildFireflies();
     this.zen = new ZenFX({ scene: this, brush: this.brush, reducedMotion, rng });
     this.rake = new SandRake({ canvas: $('sand-canvas'), scene: this, emit: (ev) => this.emit(ev) });
@@ -437,6 +443,7 @@ export class Scene {
       if (this.appliedCamX === null || Math.abs(this.camX - this.appliedCamX) > 0.03) this.applyView();
       else this.placeCaption();
     }
+    this.updateWind(dt);
     this.updateProps(dt);
     this.placeKasumi();
     this.light.update(dt, this.sky.p, {
@@ -445,4 +452,4 @@ export class Scene {
   }
 }
 
-mixin(Scene, GardenArt, GardenProps);
+mixin(Scene, GardenArt, GardenProps, GardenWind);

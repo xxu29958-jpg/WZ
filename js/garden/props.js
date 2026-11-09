@@ -26,7 +26,8 @@ export class GardenProps {
 
     // flower
     const fb = this.flowerBob.step(dt, 0);
-    $('flower-stem').setAttribute('transform', `translate(660 826) rotate(${f2(fb * 0.12 + Math.sin(t * 1.1) * 1.2)})`);
+    const lean = -this.wind * 9;
+    $('flower-stem').setAttribute('transform', `translate(660 826) rotate(${f2(fb * 0.12 + Math.sin(t * 1.1) * 1.2 * (1 + this.wind * 3) + lean)})`);
     $('flower-head').setAttribute('transform', `translate(10 -54) rotate(${f2(fb * 0.3)})`);
 
     // ema
@@ -382,7 +383,7 @@ export class GardenProps {
     const sk = this.mapleShake.step(dt, 0);
     const t = this.t;
     // the gentle sway is a rotation of the whole layer: composited, never redrawn
-    const sway = Math.sin(t * 0.55) * 0.35 + sk * 1.6;
+    const sway = Math.sin(t * 0.55) * 0.35 + sk * 1.6 + this.wind * (0.7 + 0.5 * Math.sin(t * 3.1));
     this.mapleSwayDeg = sway;
     $('layer-maple').style.transform = `rotate(${sway.toFixed(3)}deg)`;
     // single leaves only flutter while the branch is actually being shaken
@@ -411,8 +412,9 @@ export class GardenProps {
       }
       if (!L.landed) {
         const tt = this.t + L.seed;
-        L.vy = lerp(L.vy, 84 + Math.sin(tt * 2.2) * 30, 1 - Math.exp(-dt * 3));
-        L.x += (L.vx + Math.sin(tt * 1.7) * 38) * dt;
+        L.vy = lerp(L.vy, 84 + Math.sin(tt * 2.2) * 30 - this.wind * 30, 1 - Math.exp(-dt * 3));
+        // the wind carries leaves off to the left
+        L.x += (L.vx + Math.sin(tt * 1.7) * 38 - this.wind * 230) * dt;
         L.y += L.vy * dt;
         L.rot += Math.sin(tt * 1.3) * 90 * dt;
         if (L.y >= L.landY) {
@@ -422,6 +424,13 @@ export class GardenProps {
         L.g.setAttribute('transform', `translate(${f2(L.x)} ${f2(L.y)}) rotate(${f2(L.rot)}) scale(1 ${f2(0.75 + 0.25 * Math.sin(tt * 3))})`);
       } else {
         const age = this.t - L.landedAt;
+        // a strong gust sends fallen leaves skittering over the sand
+        if (this.wind > 0.4 && !this.reduced) {
+          const push = (this.wind - 0.4) * 110 * (0.6 + 0.4 * Math.sin(L.seed * 7));
+          L.x -= push * dt;
+          L.rot -= push * 2.2 * dt;
+          L.g.setAttribute('transform', `translate(${f2(L.x)} ${f2(L.y)}) rotate(${f2(L.rot)}) scale(1 0.5)`);
+        }
         if (age < 0.4) L.g.setAttribute('transform', `translate(${f2(L.x)} ${f2(L.y)}) rotate(${f2(L.rot)}) scale(1 ${f2(lerp(0.75, 0.5, age / 0.4))})`);
         if (age > 16) L.g.style.opacity = f2(1 - (age - 16) / 2);
         if (age > 18) {

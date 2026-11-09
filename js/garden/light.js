@@ -49,15 +49,22 @@ export class Light {
     this.frame = 0;
     this.acc = 0;
     // soft round spots, drawn once and stamped where needed
-    this.fleckSprite = sprite([255, 240, 205], [[0, 1], [0.55, 0.6], [1, 0]]);
+    this.fleckSprite = sprite([255, 238, 196], [[0, 1], [0.5, 0.85], [0.8, 0.3], [1, 0]]);
+    this.clumpSprite = sprite([255, 255, 255], [[0, 1], [0.5, 0.7], [1, 0]]);
     this.flySprite = sprite([190, 230, 120], [[0, 1], [1, 0]]);
-    // leaf flecks: where the gaps in the canopy let the sun through (ground, world units)
+    // the maple's shadow on the sand: clumps of leaves, and flecks of sun between them
     const rng = makeRng(31);
+    this.clumps = [];
+    for (let i = 0; i < 14; i++) {
+      this.clumps.push({
+        x: 1000 + rng() * 560, y: 760 + rng() * 150, r: 60 + rng() * 80, seed: rng() * 50, k: 0.6 + rng() * 0.4,
+      });
+    }
     this.flecks = [];
-    for (let i = 0; i < 46; i++) {
+    for (let i = 0; i < 30; i++) {
       this.flecks.push({
-        x: 930 + rng() * 700, y: 740 + Math.pow(rng(), 0.8) * 300,
-        r: 14 + rng() * 30, seed: rng() * 50, k: 0.6 + rng() * 0.4,
+        x: 990 + rng() * 580, y: 752 + Math.pow(rng(), 0.9) * 180,
+        r: 12 + rng() * 20, seed: rng() * 50, k: 0.6 + rng() * 0.4,
       });
     }
     // dust motes, in screen fractions (they live in the light, not in the world)
@@ -242,26 +249,30 @@ export class Light {
     // the canopy's shadow: a long soft patch on the sand to the right
     // (shade is lit by the blue sky, so it's a little cool)
     const over = mode === 'over';
+    // the clumps are drawn as one mask on a scratch canvas, then tinted, so overlaps don't pile up
+    const sc = this.scratch || (this.scratch = document.createElement('canvas'));
+    if (sc.width !== c.canvas.width || sc.height !== c.canvas.height) { sc.width = c.canvas.width; sc.height = c.canvas.height; }
+    const m = sc.getContext('2d');
+    m.globalCompositeOperation = 'source-over';
+    m.clearRect(0, 0, sc.width, sc.height);
+    for (const cl of this.clumps) {
+      const dx = sway * 30 * cl.k + noise1(t * 0.12, cl.seed) * 10 * (1 + wind * 2);
+      const [x, y] = at(cl.x + dx, cl.y);
+      const r = cl.r * S;
+      m.globalAlpha = 0.75;
+      m.drawImage(this.clumpSprite, x - r, y - r * 0.4, r * 2, r * 0.8);
+    }
+    m.globalAlpha = 1;
+    m.globalCompositeOperation = 'source-in';
+    m.fillStyle = over ? rgba([70, 84, 140], 0.11 * p.dapple) : rgba([190, 186, 206], p.dapple);
+    m.fillRect(0, 0, sc.width, sc.height);
     c.globalCompositeOperation = over ? 'source-over' : 'multiply';
-    const [cx, cy] = at(1290 + sway * 30, 880);
-    c.save();
-    c.translate(cx, cy);
-    c.scale(1, 0.38);
-    const R = 470 * S;
-    const sg = c.createRadialGradient(0, 0, 0, 0, 0, R);
-    const sh = over ? [62, 64, 104] : [168, 166, 186];
-    const k = over ? 0.2 : 1;
-    sg.addColorStop(0, rgba(sh, 0.9 * k * p.dapple));
-    sg.addColorStop(0.6, rgba(sh, 0.65 * k * p.dapple));
-    sg.addColorStop(1, rgba(sh, 0));
-    c.fillStyle = sg;
-    c.fillRect(-R, -R, R * 2, R * 2);
-    c.restore();
+    c.drawImage(sc, 0, 0);
     // flecks of sun through the leaves: they drift with the branch and shimmer
     c.globalCompositeOperation = over ? 'source-over' : 'screen';
-    const kf = over ? 0.42 : 0.85;
+    const kf = over ? 0.55 : 0.8;
     for (const f of this.flecks) {
-      const shimmer = 0.55 + 0.45 * noise1(t * (0.5 + wind) + f.seed, f.seed);
+      const shimmer = 0.5 + 0.5 * noise1(t * (0.35 + wind) + f.seed, f.seed);
       const dx = sway * 26 * f.k + noise1(t * 0.3, f.seed + 3) * 8 * (1 + wind * 3);
       const [x, y] = at(f.x + dx, f.y);
       const r = f.r * S;

@@ -110,6 +110,11 @@
   <div id="world-layers">
   <svg id="scene-back" class="layer" viewBox="0 0 1600 1000" aria-hidden="true">
     <defs>
+    <radialGradient id="contact" cx="50%" cy="50%" r="50%">
+      <stop offset="0" stop-color="#4a3424" stop-opacity=".34"/>
+      <stop offset=".55" stop-color="#4a3424" stop-opacity=".16"/>
+      <stop offset="1" stop-color="#4a3424" stop-opacity="0"/>
+    </radialGradient>
     <filter id="grain-sand" x="0" y="0" width="100%" height="100%" filterUnits="objectBoundingBox">
       <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="9" stitchTiles="stitch"/>
       <feColorMatrix type="matrix" values="0 0 0 0 0.30  0 0 0 0 0.21  0 0 0 0 0.13  0 0 0 -2.2 1.32"/>
@@ -121,6 +126,19 @@
         <rect x="-1500" y="700" width="4600" height="900" fill="#000" filter="url(#grain-sand)" class="paper-grain"/>
         <g id="rake"></g>
         <g id="rings"></g>
+        <!-- soft contact shadows: everything that stands on the sand sits in a little shade -->
+        <g id="contact-shadows" fill="url(#contact)">
+          <ellipse cx="336" cy="834" rx="150" ry="22"/>
+          <ellipse cx="806" cy="854" rx="192" ry="26"/>
+          <ellipse cx="1082" cy="930" rx="98" ry="18"/>
+          <ellipse cx="472" cy="944" rx="92" ry="17"/>
+          <ellipse cx="630" cy="932" rx="40" ry="9"/>
+          <ellipse cx="266" cy="838" rx="44" ry="10"/>
+          <ellipse cx="1190" cy="838" rx="30" ry="7"/>
+          <ellipse cx="1410" cy="838" rx="30" ry="7"/>
+          <ellipse cx="546" cy="942" rx="16" ry="4"/>
+          <ellipse cx="362" cy="866" rx="14" ry="4"/>
+        </g>
       </g>
 
   </svg>
@@ -171,6 +189,8 @@
 
       <!-- everything that stands on the ground, re-sorted by depth as Kon walks -->
       <g id="depth">
+      <!-- pampas grass along the wall (generated; it sways, and bows in a gust) -->
+      <g id="susuki" aria-hidden="true"></g>
       <!-- stone lantern (click to light it) -->
       <g id="lantern" class="clickable" aria-label="Stone lantern">
         <ellipse cx="330" cy="814" rx="128" ry="22" class="c-moss"/>

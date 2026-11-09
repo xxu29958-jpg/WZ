@@ -71,6 +71,8 @@ const brain = new Brain({ reducedMotion: reduced(), rng: rngFor(2) });
 // a sparrow drops by now and then (scripted checks call it in with ?birds or __zen.birds.visit())
 const birds = new Birds({ parent: $('depth'), rng: rngFor(5), reduced: reduced(), auto: !manual || params.has('birds') });
 scene.visitor = birds;
+// gusts of wind come on their own (scripted checks call them with ?wind or __zen.scene.gust())
+scene.autoGusts = !manual || params.has('wind');
 
 reducedMQ.addEventListener?.('change', () => {
   rig.setReducedMotion(reduced());
@@ -262,6 +264,7 @@ function tick(dt, ts) {
     else if (em.type === 'scatterLeaf') scene.scatterLeaf(em.data);
     else if (em.type === 'snailPoke') scene.hideSnail();
   }
+  rig.wind = scene.wind;
   rig.update(dt, pose, where);
   const body = rig.measure();
   const clack = senses.events.some((e) => e.type === 'clack');

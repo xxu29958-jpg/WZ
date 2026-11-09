@@ -270,6 +270,11 @@ export function runDemo(zen, name, opts = {}) {
       }
       break;
     }
+    case 'gust':
+      cursor.hidden = true;
+      scene.gust(opts.k ? +opts.k : 1);
+      adv(opts.t ?? 1.4);
+      break;
     case 'night':
       cursor.hidden = true;
       scene.toggleNight(true);

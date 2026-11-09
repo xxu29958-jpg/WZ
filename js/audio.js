@@ -116,6 +116,28 @@ export class Sound {
       case 'chime':
         [1047, 1319, 1568, 2093].forEach((f, i) => this.tone(f, t + i * 0.09, { d: 0.8, peak: 0.08 }));
         break;
+      case 'gust': { // a soft rush of air that swells and fades
+        const d = 3.6;
+        const len = Math.ceil(this.ctx.sampleRate * d);
+        const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+        const f = this.ctx.createBiquadFilter();
+        f.type = 'bandpass';
+        f.Q.value = 0.6;
+        f.frequency.setValueAtTime(380, t);
+        f.frequency.linearRampToValueAtTime(1100, t + 1.1);
+        f.frequency.linearRampToValueAtTime(520, t + d);
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(0.06 * Math.min(1.4, k), t + 0.9);
+        g.gain.linearRampToValueAtTime(0.0001, t + d);
+        src.connect(f).connect(g).connect(this.master);
+        src.start(t);
+        break;
+      }
       case 'leaves':
         this.noise(t, { d: 0.35, peak: 0.07, freq: 4500, q: 0.5 });
         break;

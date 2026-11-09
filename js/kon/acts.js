@@ -158,6 +158,26 @@ export const ACTS = {
     },
   },
 
+  // a gust: face into the wind, eyes shut, and enjoy it
+  breeze: {
+    caption: 'breeze',
+    pose(t, P, c) {
+      P.gaze = c.away(300, -150);
+      P.headFollow = 0.45;
+      P.pitch = -0.2;
+      const close = smoothstep(0.25, 0.7, t);
+      P.shutL = P.shutR = close;
+      P.shutStyle = 'happy';
+      P.smile = 0.75 * close;
+      P.blush = 0.18 * close;
+      P.earPerk = -0.25;
+      P.tailAmp = 0.4;
+      P.breath = 0.7;
+      P.armL = { x: -24, y: -44, space: 'body' };
+      P.armR = { x: 24, y: -44, space: 'body' };
+    },
+  },
+
   fakesleep: {
     caption: 'fakesleep',
     pose(t, P, c) {

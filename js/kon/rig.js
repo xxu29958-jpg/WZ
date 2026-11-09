@@ -358,14 +358,17 @@ export class FoxRig {
     // ears lag behind body lean and head roll
     s.earL.v -= (leanV * 0.55 + s.tilt.v * dt * 18) * m;
     s.earR.v -= (leanV * 0.55 + s.tilt.v * dt * 18) * m;
-    const earL = s.earL.step(dt, -20 + perkAmt - (P.earL || 0));
-    const earR = s.earR.step(dt, 20 - perkAmt + (P.earR || 0));
+    // in the wind, both ears are pushed back the way it blows, and flutter
+    const w = this.wind || 0;
+    const flut = w > 0.15 ? Math.sin(this.t * 23) * (w - 0.15) * 6 : 0;
+    const earL = s.earL.step(dt, -20 + perkAmt - (P.earL || 0) - w * 13 + flut);
+    const earR = s.earR.step(dt, 20 - perkAmt + (P.earR || 0) - w * 13 - flut);
     const earSy = 1 + perk * 0.05;
     el.earL.setAttribute('transform', `${tr(-46 - yaw * 5, -50 - pitch * 2)} rotate(${f2(earL)}) scale(1 ${f2(earSy)})`);
     el.earR.setAttribute('transform', `${tr(46 - yaw * 5, -50 - pitch * 2)} rotate(${f2(earR)}) scale(1 ${f2(earSy)})`);
 
     s.ahoge.v -= leanV * 1.4 * m + s.tilt.v * dt * 30 * m;
-    const ahoge = s.ahoge.step(dt, (P.ahoge || 0) - tilt * 0.4);
+    const ahoge = s.ahoge.step(dt, (P.ahoge || 0) - tilt * 0.4 - w * 26 + flut * 3);
     el.ahoge.setAttribute('transform', `${tr(2 + yaw * 6, -72 + pitch * 2)} rotate(${f2(ahoge)})`);
 
     s.bell.v -= leanV * 0.9 * m;

@@ -16,6 +16,7 @@ export const VOICE = {
   groom: { chance: 0.5, lines: ['Busy. Very busy.', 'Just washing up.'] },
   flower: { chance: 0.6, lines: ['Pretty flower.', 'Hello, flower.'] },
   sky: { chance: 0.6, lines: ['Ooh, a cloud.', 'Was that a bird?'] },
+  breeze: { chance: 0.6, lines: ['Ahh… nice.', 'Whoosh!'] },
   lapseNight: { chance: 0.8, lines: ['Whoa. Pretty…', 'Bye, sun!'] },
   lapseDay: { chance: 0.8, lines: ['Wait, morning?!', 'Did I sleep?'] },
   fakesleep: { chance: 0.7, lines: ['Zzz… (totally asleep)', 'Snore. Snore.'] },

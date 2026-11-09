@@ -515,6 +515,17 @@ export class Brain {
       case 'birdChirp':
         if (!asleep && this.reactive()) this.impulse({ type: 'earFlick', side: ev.x < (s.self ? s.self.x : 800) ? 'l' : 'r', s: 0.35 });
         break;
+      case 'gust':
+        // a gust: ears flick; and when there's nothing better to do, Kon enjoys it
+        if (asleep) { this.impulse({ type: 'earFlick', side: 'r', s: 0.6 }); break; }
+        // (it pauses whatever Kon is doing on the spot, but not a walk somewhere)
+        if (this.state === 'IDLE' && !this.greet && !(s.self && (s.self.moving || s.self.airborne)) &&
+            !(this.life.act && ['bird', 'leaf', 'home'].includes(this.life.act.id)) && this.rng() < 0.65) {
+          if (this.life.act) this.dropLife(4);
+          this.idleAct = this.makeAct('breeze', { dur: 3.6 });
+          this.say('breeze');
+        } else if (this.reactive()) this.impulse({ type: 'earFlick', side: 'r', s: 0.5 });
+        break;
       case 'lapse':
         // the lantern runs the clock: Kon turns to watch the sky change
         if (!asleep) {
