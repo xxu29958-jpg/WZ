@@ -26,6 +26,14 @@ DEMOS = {
     "mobile": "?demo=at&to=basin&t=2|390x844",
     "sparrow": "?demo=sparrow&perch=lantern&t=7",
     "sparrow-head": "?demo=sparrow-head",
+    "golden": "?demo=idle&hour=17.5",
+    "sunset-lapse": "?demo=night&t=4.2",
+    "gust": "?demo=gust&hour=15&t=1.6",
+    "star": "?demo=meteor&hour=22.6&caught=1&t=1.2",
+    "moon": "?demo=moon&hour=22.6&t=0.9",
+    "firefly": "?demo=firefly&hour=22.6&t=0.4",
+    "leafhat": "?demo=leafhat&hour=14&t=1.2",
+    "night-phone": "?demo=idle&hour=22.6|390x844",
 }
 
 

@@ -291,6 +291,66 @@ def sparrow_touch(p):
     return landed and on_screen and scared, f"landed={landed} on screen at ({sx:.0f},{sy:.0f})={on_screen} tap scared it={scared}"
 
 
+# where the shooting star will be a moment from now, on screen (it's in the far sky layer)
+METEOR_AHEAD = """
+  const sc = window.__zen.scene, m = sc.meteor, dt = arguments[0];
+  if (!m) return null;
+  const x = m.x + Math.cos(m.ang) * 780 * dt, y = m.y + Math.sin(m.ang) * 780 * dt;
+  const s = sc.farToScreen(x, y, 0.22);
+  return [s.x, s.y];
+"""
+
+
+def night_sky(p, touch=False):
+    """After dark: catch a falling star with a real click (or tap), send a wish on a golden
+    crane, then poke the moon."""
+    p.load("motion=full&hour=22.6", wait=1.8)
+    p.js("window.__zen.brain.zenArmed = false;")
+    caught = False
+    for _ in range(3):  # (a real pointer has some lag; give it a few stars)
+        p.js("window.__zen.scene.spawnMeteor()")
+        time.sleep(0.12)
+        at = p.js(METEOR_AHEAD, 0.1)
+        if not at:
+            continue
+        if touch:
+            p.ff.tap(at[0], at[1])
+        else:
+            p.ff.pointer_path([(at[0], at[1])], 0, press=True)
+        caught = p.wait_for("document.getElementById('wish').classList.contains('starlit')", 0.8)
+        if caught:
+            break
+        time.sleep(1.2)
+    # (the plaque lights up at once; Kon hears about it on the next frame)
+    p.wait_for("window.__zen.brain.caption.key === 'starCaught'", 0.6, every=0.05)
+    said = p.caption()["key"]
+    p.shot("star-caught" + ("-phone" if touch else ""))
+    box = p.js("const r = document.getElementById('wish-input').getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2];")
+    if touch:
+        p.ff.tap(box[0], box[1])
+    else:
+        p.ff.pointer_path([(box[0], box[1])], 0, press=True)
+    p.ff.type_keys("a quiet year", delay_ms=60)
+    p.ff.type_keys("\ue007", delay_ms=60)  # Enter
+    golden = p.wait_for("window.__zen.scene.crane && window.__zen.scene.crane.g.getAttribute('class') === 'crane-gold'", 2)
+    wish_caption = p.caption()["key"]
+    time.sleep(4.5)
+    moon = p.js("const sc = window.__zen.scene; if (!sc.moonAt) return null; const s = sc.farToScreen(sc.moonAt.x, sc.moonAt.y, 0.22); return [s.x, s.y];")
+    poked = False
+    if moon:
+        if touch:
+            p.ff.tap(moon[0], moon[1])
+        else:
+            p.ff.pointer_path([(moon[0], moon[1])], 0, press=True)
+        poked = p.wait_for("window.__zen.brain.caption.key === 'moonRabbit'", 1.5)
+    ok = caught and said == "starCaught" and golden and wish_caption == "starWish" and poked
+    return ok, f"caught a star={caught} ({said}); golden crane={golden} ({wish_caption}); moon poked={poked}"
+
+
+def night_sky_touch(p):
+    return night_sky(p, touch=True)
+
+
 # phones (portrait and landscape), tablets, laptops, big and ultra-wide screens
 SIZES = ["320x568", "375x667", "390x844", "414x896", "844x390", "768x1024", "1024x768", "1280x720", "1440x900", "1920x1080", "2560x1080"]
 
@@ -359,6 +419,8 @@ SCENARIOS = {
     "mobile": (mobile_touch, "390x844"),
     "sparrow-touch": (sparrow_touch, "390x844"),
     "sizes": (layout_at_sizes, "1600x1200"),
+    "night-sky": (night_sky, "1440x900"),
+    "night-sky-touch": (night_sky_touch, "390x844"),
 }
 
 

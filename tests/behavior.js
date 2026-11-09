@@ -11,6 +11,7 @@ import { TAU } from '../js/math.js';
 import { CAPTIONS } from '../js/kon/captions.js';
 import { VOICE } from '../js/kon/voice.js';
 import { Birds, birdContext } from '../js/garden/birds.js';
+import { Sky, paletteAt, isNightHour } from '../js/garden/sky.js';
 
 const HEAD = { x: 800, y: 612 };
 const BODY = {
@@ -806,6 +807,133 @@ test('Kon watches a bird out of reach from below (no pounce), and leaves it alon
     if ((a && a.id === 'bird') || sm.brain.state === 'POUNCE') chased = true;
   });
   return { ok: watched && !pounced && chatter > 0.1 && dist < 420 && !chased, info: `watched in ${watchers.length}/4 visits, from ≤ ${dist.toFixed(0)} px, chattering ≥ ${chatter.toFixed(2)}, pounced: ${pounced}; chased while typing: ${chased}` };
+});
+
+
+// ---------------------------------------------------------------- the sky, the clock and small wonders
+test('the sky has a sensible palette at every hour (sun by day, moon and stars by night)', () => {
+  const bad = [];
+  for (let h = 0; h < 24; h += 0.05) {
+    const p = paletteAt(h);
+    const nums = [...p.sky.flat(), ...p.ridge.flat(), ...p.amb, ...p.ambSun, p.vig, p.stars, p.rays, p.lamp, p.dapple, p.lift, p.sun.y, p.moon.y];
+    if (nums.some((v) => !Number.isFinite(v) || v < -1000 || v > 1000)) bad.push(`${h.toFixed(2)}: not finite`);
+    const night = isNightHour(h);
+    if (night && p.stars < 0.5 && h > 19.6) bad.push(`${h.toFixed(2)}: night without stars`);
+    if (!night && h > 8 && h < 15 && (p.stars > 0.01 || p.lamp > 0.01)) bad.push(`${h.toFixed(2)}: daytime stars or lamp`);
+    if (h > 7 && h < 18 && !p.sun.up) bad.push(`${h.toFixed(2)}: no sun`);
+    if ((h > 20 || h < 5) && !p.moon.up) bad.push(`${h.toFixed(2)}: no moon`);
+  }
+  return { ok: bad.length === 0, info: bad.slice(0, 4).join('; ') || 'checked 480 moments of the day' };
+});
+
+test('the lantern time-lapse lingers through golden hour and sunset, and can run back', () => {
+  const root = { style: { setProperty() {} } };
+  const sky = new Sky({ root, hour: 12 });
+  sky.lapseTo(22.6, 8);
+  let t = 0, colorful = 0, prev = sky.hour, backwards = 0;
+  while (sky.lapsing && t < 20) {
+    sky.update(1 / 60);
+    t += 1 / 60;
+    if (sky.hour >= 16.4 && sky.hour <= 19.8) colorful += 1 / 60;
+    if (sky.hour < prev - 1e-6 && prev - sky.hour < 12) backwards++;
+    prev = sky.hour;
+  }
+  const end = sky.hour;
+  // halfway into a lapse to morning, the lantern is clicked again: it rewinds
+  sky.lapseTo(7.9, 6);
+  for (let i = 0; i < 120; i++) sky.update(1 / 60);
+  const mid = sky.hour;
+  sky.lapseTo(end, 2, { back: true });
+  while (sky.lapsing) sky.update(1 / 60);
+  // those hours are a third of the span; they should get clearly more than a third of the time
+  const share = colorful / t, hoursShare = (19.8 - 16.4) / 10.6;
+  const ok = Math.abs(t - 8) < 0.1 && Math.abs(end - 22.6) < 0.01 && share > hoursShare * 1.3 && backwards === 0 && Math.abs(sky.hour - end) < 0.01 && mid !== end;
+  return { ok, info: `lapse ${t.toFixed(2)} s; golden hour to dusk is ${(100 * hoursShare).toFixed(0)}% of the hours and ${(100 * share).toFixed(0)}% of the time; ends at ${end.toFixed(2)}; rewound to ${sky.hour.toFixed(2)}` };
+});
+
+/** Kon resting on the cushion, with nothing planned. */
+const resting = (sim) => {
+  sim.still(1);
+  sim.brain.zenArmed = false;
+  sim.brain.life.restUntil = 1e9;
+  sim.still(1);
+  return sim.brain.state === 'IDLE' && !sim.brain.life.act;
+};
+
+test('a gust: resting Kon turns into the wind and enjoys it; a sleeping Kon sleeps on', () => {
+  let enjoyed = 0, tries = 0;
+  for (const seed of [2, 5, 8, 13, 21, 34]) {
+    const sim = new Sim(seed);
+    if (!resting(sim)) continue;
+    tries++;
+    sim.events.push({ type: 'gust', k: 1 });
+    sim.still(0.5);
+    if (sim.brain.idleAct && sim.brain.idleAct.name === 'breeze' && sim.brain.caption.key === 'breeze') enjoyed++;
+  }
+  const s2 = new Sim(3);
+  s2.still(1);
+  s2.brain.go('SLEEPING');
+  s2.still(0.5);
+  s2.events.push({ type: 'gust', k: 1.2 });
+  s2.still(2);
+  return { ok: tries >= 4 && enjoyed >= 2 && enjoyed < tries + 1 && s2.brain.state === 'SLEEPING', info: `enjoyed the breeze ${enjoyed}/${tries} times; asleep through a gust: ${s2.brain.state === 'SLEEPING'}` };
+});
+
+test('a shooting star: Kon makes a wish (but not in the middle of real meditation)', (sim) => {
+  resting(sim);
+  sim.events.push({ type: 'meteor', x: 1000, y: 250 });
+  let wished = false, lookedUp = false;
+  sim.run(3, null, (P) => {
+    if (sim.brain.idleAct && sim.brain.idleAct.name === 'wishStar') wished = true;
+    if (P.gaze && P.gaze.y < 400) lookedUp = true;
+  });
+  const s2 = new Sim(7);
+  s2.still(1);
+  s2.brain.go('ZAZEN');
+  s2.still(0.5);
+  s2.events.push({ type: 'meteor', x: 1000, y: 250 });
+  s2.still(1);
+  return { ok: wished && lookedUp && sim.brain.caption.key === 'meteor' && s2.brain.state === 'ZAZEN', info: `wished=${wished} looked up=${lookedUp}; zazen undisturbed: ${s2.brain.state}` };
+});
+
+test('a firefly on the nose: a long cross-eyed stare, then a sneeze that sends it off', (sim) => {
+  resting(sim);
+  sim.events.push({ type: 'fireflyNose' });
+  let stared = 0, sneezed = -1, sentOff = false;
+  sim.run(4.5, null, (P) => {
+    const nose = sim.brain.s.body.nose;
+    if (sim.brain.state === 'BOOPED' && P.gaze && Math.hypot(P.gaze.x - nose.x, P.gaze.y - nose.y) < 20) stared += DT;
+    for (const e of sim.brain.emits) {
+      if (e.type === 'fireflyGo') sentOff = true;
+      if (e.type === 'sfx' && e.data === 'sneeze' && sneezed < 0) sneezed = sim.t;
+    }
+  });
+  return { ok: stared > 1.5 && sneezed > 0 && sentOff, info: `stared at its nose for ${stared.toFixed(1)} s; sneezed: ${sneezed > 0}; firefly sent off: ${sentOff}` };
+});
+
+test('a leaf on the head: Kon looks up at it, then blows it away', (sim) => {
+  resting(sim);
+  sim.events.push({ type: 'leafOnHead' });
+  let up = false, blew = false;
+  sim.run(3.5, null, (P) => {
+    if (P.gaze && P.gaze.y < sim.brain.s.body.head.y - 40) up = true;
+    for (const e of sim.brain.emits) if (e.type === 'blowLeaf') blew = true;
+  });
+  return { ok: up && blew && sim.brain.caption.key === 'leafHat', info: `looked up=${up} blew=${blew} caption=${sim.brain.caption.key}` };
+});
+
+test('the moon rabbit and the lantern time-lapse each get a reaction', (sim) => {
+  resting(sim);
+  sim.events.push({ type: 'moonPoke', x: 640, y: 280 });
+  let waved = false;
+  sim.run(2, null, () => { if (sim.brain.idleAct && sim.brain.idleAct.name === 'moonWave') waved = true; });
+  const moonKey = sim.brain.caption.key;
+  sim.still(4);
+  sim.events.push({ type: 'lapse', to: 'night', x: 1300, y: 330 });
+  sim.still(0.4);
+  const lapseKey = sim.brain.caption.key;
+  const looking = sim.brain.flash && sim.brain.flash.x === 1300;
+  return { ok: waved && moonKey === 'moonRabbit' && lapseKey === 'lapseNight' && looking, info: `waved=${waved} captions: ${moonKey}, ${lapseKey}; watching the sky=${!!looking}` };
 });
 
 export function runAll() {
