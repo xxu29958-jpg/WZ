@@ -137,7 +137,7 @@ html, body {
 .c-bamboo { fill: var(--bamboo); }
 .c-bamboo-dark { fill: var(--bamboo-dark); }
 .c-bamboo-in { fill: var(--bamboo-in); }
-.c-water { fill: var(--water); }
+.c-water { fill: var(--water-sky, var(--water)); }
 .c-zafu-top { fill: var(--zafu-top); }
 .c-zafu-side { fill: var(--zafu-side); }
 .c-tree-far { fill: var(--tree-far); }
@@ -159,9 +159,30 @@ html, body {
 .c-snail { fill: #e8cfa6; }
 .c-shell { fill: #c78a52; }
 
-.hill-far { fill: #e3dcc6; }
-.hill-near { fill: #d8d4bb; }
-.mist { fill: #f3ecdc; opacity: .85; }
+/* the sky and the hills take their colors from the hour (js/garden/sky.js) */
+.sky-s0 { stop-color: var(--sky0, #8fb6cd); }
+.sky-s1 { stop-color: var(--sky1, #b9d0d5); }
+.sky-s2 { stop-color: var(--sky2, #e6e6d6); }
+.sky-s3 { stop-color: var(--sky3, #f5efdf); }
+.sun-disc { fill: #fffaf0; }
+.sun-halo { stop-color: var(--sun-glow, #fff3cf); }
+.hill-far { fill: var(--ridge0, #c1ccca); }
+.hill-mid { fill: var(--ridge1, #a6b6ae); }
+.hill-near { fill: var(--ridge2, #8b9f8e); }
+.mist { fill: var(--mist, #fbf8ee); opacity: var(--mist-a, .85); }
+.kasumi-stop { stop-color: var(--mist, #fbf8ee); }
+#kasumi { opacity: calc(var(--mist-a, .85) * .8); }
+/* the night sky */
+#layer-stars { opacity: var(--stars, 0); }
+#milky { opacity: var(--stars, 0); }
+.star-dust { fill: #eef1ff; opacity: .75; }
+.star { fill: #fff8e8; animation: twinkle 4s ease-in-out infinite alternate; }
+@keyframes twinkle { from { opacity: .3; } to { opacity: 1; } }
+.moon-disc { fill: #f8efd4; }
+.moon-rabbit { fill: #e2d3ab; opacity: .8; }
+#moon-mallet { fill: none; stroke: #e2d3ab; stroke-width: 2.6; stroke-linecap: round; }
+.moon-shade { fill: none; stroke: #fffaf0; stroke-width: 1.4; opacity: .6; }
+.meteor { stroke: url(#meteor-tail); stroke-width: 2.2; stroke-linecap: round; fill: none; }
 #enso { opacity: .92; }
 .wall-stains path { fill: var(--wall-stain); opacity: .28; }
 .wall-eave-shadow { fill: #6b5537; opacity: .14; }
@@ -248,21 +269,21 @@ html, body {
 .clickable { cursor: pointer; }
 #kon-head { cursor: pointer; }
 
-/* ---------- night ---------- */
-#night-veil {
+/* ---------- light ---------- */
+/* the light map over the garden, and sunlight on top of everything */
+#shade, #sunlight {
   position: absolute;
-  inset: 0;
-  background: #26305e;
-  mix-blend-mode: multiply;
-  opacity: 0;
+  left: 0; top: 0;
+  width: 100%;
+  height: 100%;
   pointer-events: none;
-  transition: opacity 1.6s ease;
 }
-.is-night #night-veil { opacity: .72; }
-#glow-world > * { opacity: 0; transition: opacity 1.4s ease; }
-.is-night #glow-world > * { opacity: 1; }
-.moon { fill: #f6eccd; }
-.is-night .lantern-window { fill: #ffcf6b; }
+/* (the shade switches itself between multiply and plain alpha: see light.js) */
+/* lit things: the lantern follows the hour, fireflies come out after dark */
+#lantern-halo, #lantern-window-lit, #glow-world > .lantern-mullion { opacity: var(--lamp, 0); }
+#fireflies, #cursor-firefly { opacity: 0; transition: opacity 1.4s ease; }
+.is-dark #fireflies, .is-dark #cursor-firefly { opacity: 1; }
+.lantern-window { fill: color-mix(in srgb, #ffcf6b calc(var(--lamp, 0) * 100%), #6f6a5e); }
 
 /* ---------- branding ---------- */
 .brand {
@@ -322,8 +343,9 @@ html, body {
   font-size: 17px;
   margin-right: 6px;
 }
-.is-night .wordmark, .is-night .tagline .zh { color: #f3e7cf; }
-.is-night .tagline { color: rgba(243, 231, 207, .7); }
+.wordmark, .tagline, .tagline .zh { transition: color 1.2s ease; }
+.is-dark .wordmark, .is-dark .tagline .zh { color: #f3e7cf; }
+.is-dark .tagline { color: rgba(243, 231, 207, .7); }
 
 /* ---------- caption ---------- */
 .caption {
@@ -346,7 +368,7 @@ html, body {
   transition: opacity .35s ease, transform .35s ease;
 }
 .caption.swap span { opacity: 0; transform: translateY(4px); }
-.is-night .caption { color: #f3e7cf; }
+.is-dark .caption { color: #f3e7cf; }
 
 /* ---------- the wish plaque ---------- */
 .ema {
@@ -438,7 +460,7 @@ html, body {
 }
 .ema:focus-within .ema-hint { opacity: 1; }
 .ema.is-hanging { transition: none; }
-.is-night .ema-board { filter: drop-shadow(0 2px 0 var(--ink)) brightness(.62) saturate(.9); }
+.is-dark .ema-board { filter: drop-shadow(0 2px 0 var(--ink)) brightness(.62) saturate(.9); }
 
 /* ---------- corner controls & hints ---------- */
 .corner {
@@ -557,7 +579,7 @@ html, body {
 .brand, .corner { transition: opacity .25s ease; }
 
 @media (prefers-reduced-motion: reduce) {
-  .caption span, #night-veil, #glow-world > * { transition-duration: .01s; }
+  .caption span, #fireflies, #cursor-firefly { transition-duration: .01s; }
   .hints { animation: none; }
 }
 
@@ -648,27 +670,12 @@ html, body {
   100% { opacity: 1; transform: var(--seal-pos) scale(1) rotate(-8deg); }
 }
 
-/* dusk and dawn */
-#tint {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  mix-blend-mode: multiply;
-  opacity: 0;
-  transition: opacity 2s ease, background-color 2s ease;
-}
-.is-dusk #tint { background: #ef9a55; opacity: .24; }
-.is-dawn #tint { background: #f1a7b4; opacity: .15; }
-.is-dusk .lantern-window { fill: #ffcf6b; }
-.is-dusk #glow-world > #lantern-halo,
-.is-dusk #glow-world > #lantern-window-lit,
-.is-dusk #glow-world > .lantern-mullion { opacity: .75; }
-.is-night #glow-world > #cursor-firefly { opacity: 1; }
 #cursor-firefly circle { mix-blend-mode: screen; }
 
 @media (prefers-reduced-motion: reduce) {
   .satori-seal.stamp { animation-duration: .01s; }
-  #enso-live, #enso, #tint { transition-duration: .3s; }
+  #enso-live, #enso { transition-duration: .3s; }
+  .star { animation: none; }
 }
 
 /* legs (visible when Kon stands up) */
@@ -713,6 +720,6 @@ html, body {
 .kon-says.tail-right { transform-origin: calc(100% - 18px) 110%; }
 .kon-says.tail-right::after { right: 16px; transform: rotate(45deg) skew(12deg, 12deg); }
 .kon-says.below::after { bottom: auto; top: -8px; transform: rotate(225deg) skew(12deg, 12deg); }
-.is-night .kon-says { background: #f8efd8; }
+.is-dark .kon-says { background: #f8efd8; }
 @media (max-width: 640px) { .kon-says { font-size: 16px; max-width: 200px; } }
 @media (prefers-reduced-motion: reduce) { .kon-says { transition-duration: .01s; } }

@@ -6,6 +6,11 @@
 import { clamp, lerp, smoothstep, DEG, noise1 } from '../math.js';
 import { $, f2, svgEl } from '../util.js';
 import { PLACES } from './world.js';
+import { periodOf } from './sky.js';
+
+// where a lantern click takes the clock: well into the night, or a fresh morning
+const NIGHT_HOUR = 22.6;   // (on a laptop screen, the full moon rises behind the pagoda)
+const MORNING_HOUR = 7.9;
 import { LEAF_COLORS } from './art.js';
 
 export class GardenProps {
@@ -17,7 +22,7 @@ export class GardenProps {
     this.updateLeaves(dt);
     this.updateDragonfly(dt);
     this.updateCrane(dt);
-    if (this.night) this.updateFireflies(dt);
+    if (this.dark || this.sky.p.stars > 0.05) this.updateFireflies(dt);
 
     // flower
     const fb = this.flowerBob.step(dt, 0);
@@ -34,10 +39,12 @@ export class GardenProps {
     $('snail-body').setAttribute('transform', `translate(${f2(-sn * 6 + crawl)} 0) scale(${f2(1 - sn * 0.75)} ${f2(1 - sn * 0.4)})`);
 
     // lantern flicker
-    if (this.night) {
+    const lamp = this.sky.p.lamp;
+    if (lamp > 0.01) {
       const fl = 0.85 + 0.1 * noise1(t * 3.1) + 0.05 * noise1(t * 11, 3);
-      $('lantern-halo').setAttribute('r', f2(230 + fl * 20));
-      $('lantern-halo').style.opacity = f2(fl);
+      this.lampFlicker = fl;
+      $('lantern-halo').setAttribute('r', f2(200 + fl * 20));
+      $('lantern-halo').style.opacity = f2(fl * lamp);
     }
 
     // auto events
@@ -96,27 +103,72 @@ export class GardenProps {
     keyClick('maple', () => this.shakeMaple(null));
   }
 
+  /**
+   * The lantern doesn't flip a switch: it runs the clock. Lighting it lets the
+   * sun go down and the moon come up; putting it out runs through the small
+   * hours into the morning. (Clicked again mid-way, the clock runs back.)
+   * Night itself (and Kon's reaction to it) arrives when the sky gets dark.
+   */
   toggleNight(force) {
-    this.night = force ?? !this.night;
-    document.body.classList.toggle('is-night', this.night);
-    document.querySelector('meta[name="theme-color"]').setAttribute('content', this.night ? '#2a2f4a' : '#f1e7d3');
-    this.emit({ type: 'night', on: this.night });
+    const goal = force ?? !(this.sky.lapsing ? this.goal : this.night);
+    const back = this.sky.lapsing && goal !== this.goal && this.lapseFrom !== undefined;
+    this.goal = goal;
+    if (back) this.sky.lapseTo(this.lapseFrom, 2.4, { back: true });
+    else {
+      this.lapseFrom = this.sky.hour;
+      this.sky.lapseTo(goal ? NIGHT_HOUR : MORNING_HOUR, goal ? 8 : 6.5);
+    }
+    if (!this.sky.lapsing) this.setNight(goal, true);
+    const b = this.baseVb || { x: 0, w: 1600 };
+    // where to look: the sun going down, or the moon going away
+    const at = goal ? { x: b.x + b.w * 0.86, y: 330 } : { x: b.x + b.w * 0.5, y: 280 };
+    this.emit({ type: 'lapse', to: goal ? 'night' : 'day', x: at.x, y: at.y, back });
     this.emit({ type: 'sfx', name: 'lantern' });
   }
 
-  /** Follow the visitor's local time: dawn, day, dusk or night. */
+  /** Night falls (or lifts). `announce`: tell Kon (a lantern time-lapse got there). */
+  setNight(night, announce = false) {
+    if (night === this.night) return;
+    this.night = night;
+    document.body.classList.toggle('is-night', night);
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', night ? '#2a2f4a' : '#f1e7d3');
+    if (announce) this.emit({ type: 'night', on: night });
+  }
+
+  /** Follow the visitor's local time (plus however far the lantern has moved the clock). */
   setTimeOfDay(hour) {
-    const night = hour < 5.5 || hour >= 19;
-    const dusk = hour >= 17 && hour < 19;
-    const dawn = hour >= 5.5 && hour < 7.5;
-    document.body.classList.toggle('is-dusk', dusk);
-    document.body.classList.toggle('is-dawn', dawn);
-    if (night && !this.night) {
-      this.night = true;
-      document.body.classList.add('is-night');
-      document.querySelector('meta[name="theme-color"]').setAttribute('content', '#2a2f4a');
-    }
-    return night ? 'night' : dusk ? 'dusk' : dawn ? 'dawn' : 'day';
+    if (this.sky.lapsing) return periodOf(this.sky.hour);
+    this.sky.set(hour + this.clockOffset);
+    if (this.sky.night !== this.night) this.setNight(this.sky.night);
+    const period = this.sky.period;
+    document.body.classList.toggle('is-dusk', period === 'dusk');
+    document.body.classList.toggle('is-dawn', period === 'dawn');
+    return period;
+  }
+
+  followClock() {
+    if (this.clock) this.setTimeOfDay(this.clock());
+  }
+
+  /** The sun and the moon on their arcs; stars and the dark-mode UI with the light. */
+  updateSkyBodies() {
+    const p = this.sky.p;
+    // sun and moon arcs are given as fractions of the screen's width
+    const b = this.baseVb || { x: 0, w: 1600 };
+    p.sun.x = b.x + b.w * p.sun.fx;
+    p.moon.x = b.x + b.w * p.moon.fx;
+    const sun = p.sun.up ? `translate(${f2(p.sun.x)} ${f2(p.sun.y)})` : 'translate(-999 -999)';
+    if (sun !== this.sunAt) { this.sunAt = sun; $('sun').setAttribute('transform', sun); }
+    // (on very wide screens little sky shows: keep the moon in it)
+    const my = Math.max(p.moon.y, Math.min(400, this.baseVb ? this.baseVb.y + 64 : 0));
+    const moon = p.moon.up ? `translate(${f2(p.moon.x)} ${f2(my)})` : 'translate(-999 -999)';
+    if (moon !== this.moonAt) { this.moonAt = moon; $('moon').setAttribute('transform', moon); }
+    const starsOn = p.stars > 0.004;
+    if (starsOn !== this.starsOn) { this.starsOn = starsOn; this.farLayers.stars.style.display = starsOn ? '' : 'none'; }
+    const dark = this.dark ? p.stars > 0.4 : p.stars > 0.5;
+    if (dark !== this.dark) { this.dark = dark; document.body.classList.toggle('is-dark', dark); }
+    // a lantern time-lapse: night begins (or ends) when the sky says so
+    if (this.sky.lapsing && this.goal !== undefined && dark === this.goal) this.setNight(this.goal, true);
   }
 
   /** At night the cursor becomes a firefly, trailing a little light. */
@@ -331,6 +383,7 @@ export class GardenProps {
     const t = this.t;
     // the gentle sway is a rotation of the whole layer: composited, never redrawn
     const sway = Math.sin(t * 0.55) * 0.35 + sk * 1.6;
+    this.mapleSwayDeg = sway;
     $('layer-maple').style.transform = `rotate(${sway.toFixed(3)}deg)`;
     // single leaves only flutter while the branch is actually being shaken
     if (this.reduced || (Math.abs(sk) < 0.01 && Math.abs(this.mapleShake.v) < 0.05)) {
@@ -440,6 +493,7 @@ export class GardenProps {
       f.el.setAttribute('cx', f2(x));
       f.el.setAttribute('cy', f2(y));
       f.el.style.opacity = f2(on);
+      f.cx = x; f.cy = y; f.on = on;
     }
   }
 }

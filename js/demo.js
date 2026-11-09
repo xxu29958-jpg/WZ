@@ -273,7 +273,7 @@ export function runDemo(zen, name, opts = {}) {
     case 'night':
       cursor.hidden = true;
       scene.toggleNight(true);
-      adv(2.2);
+      adv(opts.t ?? 9);
       break;
     default:
       break;

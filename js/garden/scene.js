@@ -10,6 +10,8 @@ import { ZenFX } from './zen.js';
 import { SandRake } from './rake.js';
 import { GardenArt } from './art.js';
 import { GardenProps } from './props.js';
+import { Sky } from './sky.js';
+import { Light } from './light.js';
 
 export { PLACES };
 
@@ -57,7 +59,19 @@ export class Scene {
     this.shishi = { angle: 18, av: 0, fill: 0, phase: 'filling', fillTime: 12, dripT: 0, pourT: 0 };
     this.shishiTube = $('shishi-tube');
 
+    // the hour and its light (the clock is set by main.js; tests keep it still)
+    this.sky = new Sky({ root: app, reduced: reducedMotion });
+    this.clock = null;
+    this.clockOffset = 0;
+    this.clockT = 0;
+    this.dark = false;
+    this.lampFlicker = 1;
+    this.mapleSwayDeg = 0;
+    this.wind = 0;
     this.buildSky();
+    this.buildKasumi();
+    this.buildStars();
+    this.light = new Light({ shade: $('shade'), sun: $('sunlight'), scene: this, reduced: reducedMotion });
     this.buildEnso();
     this.buildSand();
     this.buildMaple();
@@ -78,7 +92,7 @@ export class Scene {
     this.camX = 0;
     this.camV = 0;
     this.worldLayers = $('world-layers');
-    this.farLayers = { hills: $('layer-hills'), trees: $('layer-trees'), wall: $('layer-wall') };
+    this.farLayers = { hills: $('layer-hills'), kasumi: $('layer-kasumi'), trees: $('layer-trees'), wall: $('layer-wall'), stars: $('layer-stars') };
     this.layers = [this.back, this.svg, this.glow, ...Object.values(this.farLayers)];
     this.appliedCamX = null;
     this.captionW = 300;
@@ -129,6 +143,7 @@ export class Scene {
     this.H = H;
     this.rake.layout();
     this.applyView();
+    this.light.layout(W, H);
   }
 
   /** Where the camera should be, given where Kon is. */
@@ -170,9 +185,10 @@ export class Scene {
     this.worldLayers.style.transform = slide(1);
     this.glow.style.transform = slide(1);
     this.farLayers.hills.style.transform = slide(0.22);
+    this.farLayers.stars.style.transform = slide(0.22);
     this.farLayers.trees.style.transform = slide(0.5);
     this.farLayers.wall.style.transform = slide(0.85);
-    $('moon').setAttribute('transform', `translate(${f2(this.camX * 0.9)} 0)`);
+    this.placeKasumi();
     PLACES.maple = this.mapleToWorld(1220, 150);
     this.positionOverlays();
     this.zen.placeSeal();
@@ -194,6 +210,13 @@ export class Scene {
     // the branch sways around where it enters the screen
     const pivot = this.baseToScreen(this.maple.x + ms * 1760, this.maple.y - ms * 60);
     layer.style.transformOrigin = `${f2(pivot.x)}px ${f2(pivot.y)}px`;
+    // no stars shining through the maple's leaves (the star layer is wider than the screen by the camera margin)
+    const S = this.scale, mpx = Math.round(this.camMargin * S);
+    const rx = ms * 560 * S, ry = (ms * 300 + Math.max(0, drop)) * S;
+    const mask = `radial-gradient(ellipse ${f2(rx)}px ${f2(ry)}px at ${f2(mpx + this.W + 30)}px -10px, transparent 62%, #000 100%)`;
+    const st = $('layer-stars').style;
+    st.maskImage = mask;
+    st.webkitMaskImage = mask;
   }
 
   /**
@@ -247,6 +270,17 @@ export class Scene {
       out.push({ left: this.emaPos.x - w / 2 - 6, top: this.emaPos.y - 20, right: this.emaPos.x + w / 2 + 6, bottom: this.emaPos.y + h + 6 });
     }
     return out;
+  }
+
+  /** World → screen for a far layer that drifts `k` times as fast as the camera (parallax). */
+  farToScreen(x, y, k) {
+    return { x: (x - this.baseVb.x - this.camX * k) * this.scale, y: (y - this.baseVb.y) * this.scale };
+  }
+
+  /** The mist bands: parallax, plus a slow drift back and forth of their own. */
+  placeKasumi() {
+    const drift = this.reduced ? 0 : Math.sin(this.t * 0.045) * 60 + Math.sin(this.t * 0.118 + 1) * 14;
+    this.farLayers.kasumi.style.transform = `translate3d(${f2((-this.camX * 0.32 + drift) * this.scale)}px, 0, 0)`;
   }
 
   /** World → screen for things inside the moving world layer (as if the camera were at 0). */
@@ -385,6 +419,14 @@ export class Scene {
   update(dt) {
     this.t += dt;
     const t = this.t;
+    // the hour: a time-lapse if one is running, otherwise the visitor's clock
+    const wasLapsing = this.sky.lapsing;
+    if (!this.sky.update(dt)) {
+      if (wasLapsing && this.clock) this.clockOffset = this.sky.hour - this.clock();
+      this.clockT -= dt;
+      if (this.clockT <= 0) { this.clockT = 20; this.followClock(); }
+    }
+    this.updateSkyBodies();
     this.rake.update(dt);
     // camera follows Kon (critically damped, so it never overshoots)
     if (this.baseVb) {
@@ -396,6 +438,10 @@ export class Scene {
       else this.placeCaption();
     }
     this.updateProps(dt);
+    this.placeKasumi();
+    this.light.update(dt, this.sky.p, {
+      kon: this.konAt, fireflies: this.fireflies, sway: this.mapleSwayDeg, lampFlicker: this.lampFlicker, wind: this.wind,
+    });
   }
 }
 

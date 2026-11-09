@@ -515,6 +515,13 @@ export class Brain {
       case 'birdChirp':
         if (!asleep && this.reactive()) this.impulse({ type: 'earFlick', side: ev.x < (s.self ? s.self.x : 800) ? 'l' : 'r', s: 0.35 });
         break;
+      case 'lapse':
+        // the lantern runs the clock: Kon turns to watch the sky change
+        if (!asleep) {
+          this.flash = { x: ev.x, y: ev.y, until: this.now + 3.2 };
+          this.say(ev.to === 'night' ? 'lapseNight' : 'lapseDay', true);
+        }
+        break;
       case 'night':
         if (!asleep) {
           this.flash = { x: s.places.lantern.x, y: s.places.lantern.y, until: this.now + 1.6, sparkle: ev.on };

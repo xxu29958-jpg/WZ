@@ -44,6 +44,8 @@ export const CAPTIONS = {
   returned: ['Welcome back. Kon didn’t move an inch.', 'Kon was here the whole time. Meditating.'],
   night: ['Night falls on the garden.', 'Kon pretends not to be afraid of the dark.'],
   day: ['Morning already?', 'The sun is back. So is Kon.'],
+  lapseNight: ['The day packs up early.', 'Kon watches the sun hurry home.'],
+  lapseDay: ['The night flies by.', 'Morning comes running.'],
   leave: ['Where did you go?', 'Kon is not waiting for you.'],
 
   // the stillness test

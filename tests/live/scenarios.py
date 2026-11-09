@@ -211,10 +211,17 @@ def lantern_night(p):
     p.load("motion=full")
     lx, ly = p.screen(330, 584)
     p.ff.pointer_path([(lx, ly)], 0, press=True)
-    time.sleep(2)
-    night = p.js("return document.body.classList.contains('is-night')")
+    # the lantern runs a time-lapse: night arrives when the sky is dark (a few seconds)
+    lapsing = p.js("return window.__zen.scene.sky.lapsing")
+    night = False
+    for _ in range(40):
+        time.sleep(0.25)
+        night = p.js("return document.body.classList.contains('is-night')")
+        if night:
+            break
+    time.sleep(3)
     p.shot("night")
-    return night, f"night={night} caption='{p.caption()['text']}'"
+    return night and lapsing, f"lapse={lapsing} night={night} caption='{p.caption()['text']}'"
 
 
 def mobile_touch(p):

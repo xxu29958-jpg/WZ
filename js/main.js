@@ -189,6 +189,7 @@ const hourNow = () => {
   const d = new Date();
   return d.getHours() + d.getMinutes() / 60;
 };
+scene.clock = hourNow;
 let period = scene.setTimeOfDay(hourNow());
 if (period !== 'day') input.push({ type: 'daytime', period });
 if (!manual) {
