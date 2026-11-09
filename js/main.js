@@ -46,6 +46,7 @@ else if (!reduced()) {
   const reveal = () => {
     if (!body.classList.contains('arriving')) return;
     body.classList.replace('arriving', 'intro');
+    scene.startIntro();
     setTimeout(() => body.classList.remove('intro'), 3400);
   };
   document.fonts?.ready.then(reveal);
@@ -301,6 +302,16 @@ function tick(dt, ts) {
   scene.konSitting = settled && !!where.seat && brain.state === 'IDLE' && !brain.life.act;
   scene.konStill = settled && (brain.isStill() || scene.konSitting);
   scene.konCalm = settled && !['STARTLED', 'POUNCE', 'DIZZY', 'SATORI', 'WAKING', 'BOOPED', 'JUDGE'].includes(brain.state);
+  // the camera pushes in on a moment
+  const act = brain.idleAct && brain.idleAct.name;
+  const h = body.head;
+  scene.camFocus =
+    brain.state === 'BOOPED' && brain.arg.firefly ? { x: body.nose.x, y: body.nose.y, z: 1.16 }
+    : act === 'leafHat' ? { x: h.x, y: h.y - 30, z: 1.1 }
+    : act === 'wishStar' ? { x: h.x, y: h.y - 40, z: 1.07 }
+    : act === 'breeze' ? { x: h.x, y: h.y, z: 1.04 }
+    : brain.state === 'SATORI' ? { x: h.x, y: h.y + 40, z: 1.06 }
+    : null;
   scene.update(dt);
   scene.zen.update(dt, brain.zenInfo(), body.center);
   scene.updateCursor(dt, input.pointer);

@@ -79,7 +79,14 @@ export class GardenProps {
     });
     this.app.addEventListener('pointermove', (e) => {
       if (this.rake.active) this.rake.extend(e, this.toWorld(e.clientX, e.clientY));
+      // a mouse looks around: the layers shift against each other (a touch doesn't: fingers jump)
+      if (e.pointerType === 'mouse' && this.W) {
+        const r = this.app.getBoundingClientRect();
+        this.lookT.x = clamp(((e.clientX - r.left) / this.W) * 2 - 1, -1, 1);
+        this.lookT.y = clamp(((e.clientY - r.top) / this.H) * 2 - 1, -1, 1);
+      }
     });
+    this.app.addEventListener('pointerleave', () => { this.lookT.x = 0; this.lookT.y = 0; });
     const endRake = (e) => { if (this.rake.active) this.rake.end(e); };
     this.app.addEventListener('pointerup', endRake);
     this.app.addEventListener('pointercancel', endRake);
@@ -424,8 +431,7 @@ export class GardenProps {
     const t = this.t;
     // the gentle sway is a rotation of the whole layer: composited, never redrawn
     const sway = Math.sin(t * 0.55) * 0.35 + sk * 1.6 + this.wind * (0.7 + 0.5 * Math.sin(t * 3.1));
-    this.mapleSwayDeg = sway;
-    $('layer-maple').style.transform = `rotate(${sway.toFixed(3)}deg)`;
+    this.mapleSwayDeg = sway; // (applyCamera turns the layer)
     // single leaves only flutter while the branch is actually being shaken
     if (this.reduced || (Math.abs(sk) < 0.01 && Math.abs(this.mapleShake.v) < 0.05)) {
       if (this.mapleFluttering) {

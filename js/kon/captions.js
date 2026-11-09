@@ -39,7 +39,7 @@ export const CAPTIONS = {
   pettedAfter: ['That did not happen.', 'Kon has no idea what you mean.'],
   booped: ['A direct hit to the nose.', 'Kon has been booped.'],
   sneeze: ['Kon is allergic to boops.', 'Bless you, Kon.'],
-  admire: ['Your wish flies over the wall.', 'Off it goes.'],
+  admire: ['Your wish flies off over the valley.', 'Off it goes.'],
   admireAfter: ['Kon didn’t read it. Promise.', 'It was folded. Kon saw nothing.'],
   returned: ['Welcome back. Kon didn’t move an inch.', 'Kon was here the whole time. Meditating.'],
   night: ['Night falls on the garden.', 'Kon pretends not to be afraid of the dark.'],

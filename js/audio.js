@@ -65,7 +65,7 @@ export class Sound {
 
   /**
    * The garden's own soft sounds, called every frame: crickets after dark,
-   * and by day a bird now and then somewhere beyond the wall.
+   * and by day a bird now and then somewhere down in the valley.
    */
   ambient(dt, { dark = false } = {}) {
     if (!this.on || !this.ctx) return;

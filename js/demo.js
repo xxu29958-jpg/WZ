@@ -306,6 +306,12 @@ export function runDemo(zen, name, opts = {}) {
       adv(opts.t ?? 1.2);
       break;
     }
+    // the arrival: the camera comes down from the sky (&t: how far along)
+    case 'intro':
+      cursor.hidden = true;
+      scene.startIntro();
+      adv(opts.t ?? 0.5);
+      break;
     case 'gust':
       cursor.hidden = true;
       scene.gust(opts.k ? +opts.k : 1);

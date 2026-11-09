@@ -73,6 +73,8 @@ html, body {
   -webkit-user-select: none;
 }
 
+#stage { position: absolute; inset: 0; }
+
 /* Every layer is a little wider than the screen (the camera's range) and is
    slid with a composited transform, so panning never redraws static art. */
 #scene, #scene-back, #glow, .far-layer {
@@ -166,6 +168,45 @@ html, body {
 .sky-s3 { stop-color: var(--sky3, #f5efdf); }
 .sun-disc { fill: #fffaf0; }
 .sun-halo { stop-color: var(--sun-glow, #fff3cf); }
+/* the sacred mountain */
+.peak { fill: var(--peak, #b6c7c9); }
+.peak-shade { fill: #1d2440; opacity: .1; }
+.snow { fill: var(--snow, #f9f7f1); }
+/* the valley: lake, village, torii path, forest; the sea of clouds */
+.lake-s0 { stop-color: var(--sky2, #e2e4d6); }
+.lake-s1 { stop-color: var(--sky0, #7ba8c8); }
+.lake-deep { fill: #10203c; opacity: .16; }
+.lake-mirror { opacity: .34; }
+.lake-hi { fill: none; stroke: #fff; stroke-width: 1.3; stroke-linecap: round; opacity: .32; }
+.shore, .house { fill: var(--slope0, #97ae9e); }
+.house { filter: brightness(.82); }
+.hill-side { fill: var(--slope0, #97ae9e); }
+.torii-path { fill: none; stroke: #e2d6bc; stroke-width: 2.4; stroke-linecap: round; opacity: .55; }
+.torii { fill: #d0482f; }
+.canopy-far { fill: var(--slope0, #97ae9e); }
+.canopy-mid { fill: var(--slope1, #729077); }
+.canopy-near { fill: var(--slope2, #557558); }
+/* autumn in the forest (the light map tints these with the hour) */
+.canopy-red { fill: #c0664c; }
+.canopy-gold { fill: #c9a35c; }
+.canopy-rust { fill: #9a7050; }
+.canopy-red.near { fill: #b4553c; }
+.canopy-gold.near { fill: #c29242; }
+.haze-stop { stop-color: var(--mist, #fbf8ee); }
+.canopy-hi { fill: #fff8e0; opacity: .16; }
+.unkai { opacity: var(--unkai, .2); }
+.unkai-deep { stop-color: #d3dbe4; }
+.unkai-top { fill: #fff; opacity: .32; }
+/* the terrace edge */
+.pine-trunk { fill: #5a4031; stroke: var(--ink); stroke-width: 2.4; stroke-linejoin: round; }
+.pine-branch { fill: none; stroke: #5a4031; stroke-width: 5; stroke-linecap: round; }
+.pine-pad { fill: #3f6a45; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+.pine-pad-hi { fill: #6c9a5c; opacity: .9; }
+.shrub { fill: #57864a; stroke: var(--ink); stroke-width: 2.4; stroke-linejoin: round; }
+.shrub-hi { fill: #82ad66; opacity: .85; }
+.terrace-stone { fill: var(--stone); stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+.terrace-wall { fill: #8f8a7a; }
+.canopy-near.below { filter: brightness(.8); }
 .hill-far { fill: var(--ridge0, #c1ccca); }
 .hill-mid { fill: var(--ridge1, #a6b6ae); }
 .hill-near { fill: var(--ridge2, #8b9f8e); }
@@ -308,15 +349,9 @@ html, body {
 .arriving .brand, .arriving .corner, .arriving #wish { opacity: 0; }
 .intro #curtain { animation: curtain-up 1.5s ease-out .1s both; }
 @keyframes curtain-up { from { opacity: 1; } to { opacity: 0; } }
-/* each depth settles by a different amount: a little dolly shot through the parallax */
-.intro #layer-hills, .intro #layer-kasumi, .intro #layer-stars { animation: settle-far 2.8s cubic-bezier(.2, .7, .2, 1) both; }
-.intro #layer-trees, .intro #layer-wall { animation: settle-mid 2.8s cubic-bezier(.2, .7, .2, 1) both; }
-.intro #world-layers, .intro #glow, .intro #shade, .intro #sunlight { animation: settle-near 2.8s cubic-bezier(.2, .7, .2, 1) both; }
+/* (the camera itself comes down from the sky: Scene.startIntro) */
 .intro #layer-maple { animation: settle-maple 3s cubic-bezier(.2, .7, .2, 1) both; }
 .intro .brand, .intro .corner, .intro #wish { animation: ui-in 1s ease-out 1.1s both; }
-@keyframes settle-far { from { scale: 1.025; } to { scale: 1; } }
-@keyframes settle-mid { from { scale: 1.045; } to { scale: 1; } }
-@keyframes settle-near { from { scale: 1.07; } to { scale: 1; } }
 @keyframes settle-maple { from { scale: 1.16; opacity: .4; } to { scale: 1; opacity: 1; } }
 @keyframes ui-in { from { opacity: 0; } to { opacity: 1; } }
 

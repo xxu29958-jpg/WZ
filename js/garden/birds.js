@@ -150,7 +150,7 @@ export class Birds {
 
   fly(reason) {
     if (this.state !== 'perched' && this.state !== 'flyIn') return;
-    // away from whatever spooked it, and up over the wall
+    // away from whatever spooked it, and up over the edge
     const away = this.spookX != null ? (Math.sign(this.x - this.spookX) || this.dir) : (this.rng() < 0.5 ? -1 : 1);
     this.dir = away;
     this.state = 'flyAway';
