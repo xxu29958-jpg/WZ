@@ -298,6 +298,7 @@ html, body {
 /* lit things: the lantern follows the hour, fireflies come out after dark */
 #lantern-halo, #lantern-window-lit, #glow-world > .lantern-mullion { opacity: var(--lamp, 0); }
 #fireflies, #cursor-firefly { opacity: 0; transition: opacity 1.4s ease; }
+.basin-moon { fill: #fff6dc; opacity: calc(var(--stars, 0) * .8); }
 .is-dark #fireflies, .is-dark #cursor-firefly { opacity: 1; }
 .lantern-window { fill: color-mix(in srgb, #ffcf6b calc(var(--lamp, 0) * 100%), #6f6a5e); }
 

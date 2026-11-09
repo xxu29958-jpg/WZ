@@ -306,6 +306,7 @@ function tick(dt, ts) {
   scene.updateCursor(dt, input.pointer);
   updateCaption();
   updateVoice(body);
+  sound.ambient(dt, { dark: scene.dark });
 
   if (showDebug && ts - debugAt > 100) {
     debugAt = ts;

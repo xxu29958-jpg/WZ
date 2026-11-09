@@ -403,6 +403,13 @@ export class GardenProps {
     }
     const rip = $('basin-ripple');
     rip.setAttribute('transform', `translate(0 ${f2(Math.sin(this.t * 1.7) * 0.8)})`);
+    // the moon's reflection shivers on the water (and hides when Kon leans over it to drink)
+    if (this.sky.p.stars > 0.05) {
+      const m = $('basin-moon');
+      const near = this.konAt && Math.hypot(this.konAt.x - 470, this.konAt.y - 890) < 150;
+      m.style.display = near || !this.moonAt ? 'none' : '';
+      m.setAttribute('rx', f2(7 + Math.sin(this.t * 2.3) * 1.1 + (this.waterDrops.length ? 1.5 : 0)));
+    }
   }
 
   spawnDrop(x, y, tx, ty, splash = false) {
