@@ -73,6 +73,8 @@ const birds = new Birds({ parent: $('depth'), rng: rngFor(5), reduced: reduced()
 scene.visitor = birds;
 // gusts of wind come on their own (scripted checks call them with ?wind or __zen.scene.gust())
 scene.autoGusts = !manual || params.has('wind');
+// …and so do shooting stars and curious fireflies after dark (?meteors, or __zen.scene.spawnMeteor())
+scene.autoMeteors = !manual || params.has('meteors');
 
 reducedMQ.addEventListener?.('change', () => {
   rig.setReducedMotion(reduced());
@@ -231,7 +233,9 @@ function tick(dt, ts) {
   for (const ev of senses.events) {
     if (ev.type === 'input') scene.nudgeEma(ev.del ? 0.4 : 0.7);
     if (ev.type === 'submit') {
-      scene.launchCrane();
+      // a wish sent while a caught star still glows leaves on a golden crane
+      if (scene.starlit) { ev.star = true; scene.starlitUntil = scene.t + 0.01; }
+      scene.launchCrane(ev.star);
       if (coarseMQ.matches) wishInput.blur();
     }
   }
@@ -242,6 +246,7 @@ function tick(dt, ts) {
   if (bird) senses.objects.push(bird);
   senses.places = scene.places;
   senses.night = scene.night;
+  senses.leafOnHead = !!scene.leafOnKon;
   senses.layout = scene.mode;
 
   const pose = brain.update(dt, senses);
@@ -263,6 +268,8 @@ function tick(dt, ts) {
     else if (em.type === 'ensoScore') { memory.bestEnso = Math.max(memory.bestEnso || 0, em.data); if (!manual) saveMemory(memory); }
     else if (em.type === 'scatterLeaf') scene.scatterLeaf(em.data);
     else if (em.type === 'snailPoke') scene.hideSnail();
+    else if (em.type === 'blowLeaf') scene.blowLeaf();
+    else if (em.type === 'fireflyGo') scene.fireflyGo();
   }
   rig.wind = scene.wind;
   rig.update(dt, pose, where);
@@ -274,6 +281,13 @@ function tick(dt, ts) {
     input.push(ev);
   }
   scene.placeKon(where);
+  // what the garden needs to know about Kon: where its head is, and whether it's sitting still
+  const settled = !where.moving && !where.airborne;
+  scene.konBody = body;
+  scene.konMoving = !settled;
+  scene.konSitting = settled && !!where.seat && brain.state === 'IDLE' && !brain.life.act;
+  scene.konStill = settled && (brain.isStill() || scene.konSitting);
+  scene.konCalm = settled && !['STARTLED', 'POUNCE', 'DIZZY', 'SATORI', 'WAKING', 'BOOPED', 'JUDGE'].includes(brain.state);
   scene.update(dt);
   scene.zen.update(dt, brain.zenInfo(), body.center);
   scene.updateCursor(dt, input.pointer);

@@ -182,7 +182,17 @@ html, body {
 .moon-rabbit { fill: #e2d3ab; opacity: .8; }
 #moon-mallet { fill: none; stroke: #e2d3ab; stroke-width: 2.6; stroke-linecap: round; }
 .moon-shade { fill: none; stroke: #fffaf0; stroke-width: 1.4; opacity: .6; }
-.meteor { stroke: url(#meteor-tail); stroke-width: 2.2; stroke-linecap: round; fill: none; }
+.meteor { stroke: url(#meteor-tail); stroke-width: 2.6; stroke-linecap: round; fill: none; }
+.meteor-glow { stroke-width: 8; opacity: .28; }
+.meteor-head { fill: #fff; }
+.meteor-halo { fill: #e8efff; opacity: .35; }
+.meteor-spark { fill: #fff6d8; }
+/* a caught star: the wish plaque glows until a wish is sent */
+.ema.starlit .ema-board { filter: drop-shadow(0 2px 0 var(--ink)) drop-shadow(0 0 14px rgba(255, 214, 120, .95)) brightness(1.06); }
+.ema.starlit .ema-kanji { color: #d99a1a; text-shadow: 0 0 8px rgba(255, 210, 110, .9); }
+.crane-gold .crane-body { fill: #ffe39a; }
+.crane-gold .crane-fold { fill: #f1c45e; }
+.crane-gold { filter: drop-shadow(0 0 6px rgba(255, 214, 120, .9)); }
 #enso { opacity: .92; }
 .wall-stains path { fill: var(--wall-stain); opacity: .28; }
 .wall-eave-shadow { fill: #6b5537; opacity: .14; }

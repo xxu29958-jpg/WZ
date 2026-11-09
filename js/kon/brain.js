@@ -497,7 +497,7 @@ export class Brain {
       case 'submit':
         this.lastActive = this.now;
         this.typeBurst = 0;
-        if (this.state !== 'SLEEPING') this.go('ADMIRE');
+        if (this.state !== 'SLEEPING') this.go('ADMIRE', { star: !!ev.star });
         break;
       case 'clack':
         this.onClack(ev);
@@ -525,6 +525,42 @@ export class Brain {
           this.idleAct = this.makeAct('breeze', { dur: 3.6 });
           this.say('breeze');
         } else if (this.reactive()) this.impulse({ type: 'earFlick', side: 'r', s: 0.5 });
+        break;
+      case 'meteor':
+        // a shooting star: Kon looks up, and if nothing else is going on, makes a wish
+        if (asleep || this.state === 'ZAZEN' || this.state === 'SATORI') break;
+        this.flash = { x: ev.x, y: ev.y, until: this.now + 1.2 };
+        if (this.state === 'IDLE' && !this.greet && !(s.self && s.self.moving) && !(this.life.act && ['bird', 'home'].includes(this.life.act.id))) {
+          if (this.life.act) this.dropLife(4);
+          this.idleAct = this.makeAct('wishStar', { dur: 3.6 });
+          this.say('meteor', true);
+        }
+        break;
+      case 'starCaught':
+        if (!asleep) {
+          const a = s.typing && s.typing.anchor;
+          if (a) this.flash = { x: a.x, y: a.y, until: this.now + 1.6, sparkle: true };
+          this.say('starCaught', true);
+        }
+        break;
+      case 'moonPoke':
+        if (asleep) break;
+        this.flash = { x: ev.x, y: ev.y, until: this.now + 2.4 };
+        if (this.state === 'IDLE' && !this.greet && !(s.self && s.self.moving)) {
+          if (this.life.act && this.life.act.id !== 'bird') this.dropLife(4);
+          this.idleAct = this.makeAct('moonWave', { dur: 2.6 });
+        }
+        this.say('moonRabbit', true);
+        break;
+      case 'fireflyNose':
+        if (this.state === 'IDLE' || this.state === 'OBSERVING' || this.state === 'RELAXING') this.go('BOOPED', { firefly: true });
+        break;
+      case 'leafOnHead':
+        if (this.state === 'ZAZEN') this.say('leafOnHeadZen', true);
+        else if (this.state === 'IDLE' && !this.greet) {
+          this.idleAct = this.makeAct('leafHat', { dur: 3.6 });
+          this.say('leafHat', true);
+        }
         break;
       case 'lapse':
         // the lantern runs the clock: Kon turns to watch the sky change

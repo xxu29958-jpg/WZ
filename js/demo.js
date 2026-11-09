@@ -270,6 +270,42 @@ export function runDemo(zen, name, opts = {}) {
       }
       break;
     }
+    // after dark: a shooting star (&caught: you caught it), the moon rabbit, a firefly on Kon's nose
+    case 'meteor':
+      cursor.hidden = true;
+      adv(1);
+      scene.spawnMeteor();
+      adv(opts.caught ? 0.2 : (opts.t ?? 0.3));
+      if (opts.caught) { scene.catchMeteor(scene.meteor); adv(opts.t ?? 1.6); }
+      break;
+    case 'moon':
+      cursor.hidden = true;
+      adv(1);
+      if (scene.moonAt) {
+        const m = scene.farToScreen(scene.moonAt.x, scene.moonAt.y, 0.22);
+        const r = app.getBoundingClientRect();
+        scene.skyTap(m.x + r.left, m.y + r.top);
+      }
+      adv(opts.t ?? 1.1);
+      break;
+    case 'firefly':
+      cursor.hidden = true;
+      adv(1);
+      scene.fireflyToNose();
+      until(() => brain.state === 'BOOPED', 12);
+      adv(opts.t ?? 1.2);
+      break;
+    // a leaf drifts down onto Kon's head (&t: how long after it lands)
+    case 'leafhat': {
+      cursor.hidden = true;
+      adv(1.5);
+      const c = rig.measure().crown;
+      scene.dropLeaf(c.x + 60, c.y - 280);
+      scene.leaves[scene.leaves.length - 1].aim = true;
+      until(() => scene.leafOnKon, 8);
+      adv(opts.t ?? 1.2);
+      break;
+    }
     case 'gust':
       cursor.hidden = true;
       scene.gust(opts.k ? +opts.k : 1);

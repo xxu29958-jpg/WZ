@@ -158,6 +158,85 @@ export const ACTS = {
     },
   },
 
+  // a shooting star: look up, gasp, then paws together and wish (eyes shut tight)
+  wishStar: {
+    caption: 'meteor',
+    pose(t, P, c) {
+      if (t < 0.9) {
+        P.gaze = c.target;
+        P.headFollow = 0.9;
+        P.eyeOpen = 1.15;
+        P.pupil = 1.3;
+        P.mouthOpen = 0.32 * smoothstep(0, 0.2, t);
+        P.earPerk = 1;
+        P.sparkle = 0.8;
+        return;
+      }
+      P.gaze = c.target;
+      P.headFollow = 0.25;
+      P.pitch = -0.15;
+      P.armL = GASSHO_L;
+      P.armR = GASSHO_R;
+      P.shutL = P.shutR = smoothstep(0.9, 1.15, t);
+      P.shutStyle = 'squeeze';
+      P.smile = 0.55;
+      P.blush = 0.3;
+      P.earPerk = 0.4;
+      P.tailAmp = 0.5;
+      P.tailSpeed = 1.6;
+      if (t > 2.6) { P.shutStyle = 'happy'; P.smile = 0.9; P.sparkle = 0.6; }
+    },
+  },
+
+  // a leaf has landed on Kon's head: eyes roll up to look at it… then a big puff
+  leafHat: {
+    caption: 'leafHat',
+    pose(t, P, c) {
+      P.headFollow = 0.1;
+      P.earPerk = 0.5;
+      c.once('twitch', () => c.impulse({ type: 'earFlick', side: 'l', s: 0.7 }));
+      if (t < 2.1) {
+        // looking up at your own head goes a little cross-eyed
+        P.gaze = c.away(-6, -95);
+        P.pitch = -0.12;
+        P.eyeOpen = 1.1;
+        P.mouthOpen = 0.12;
+        P.browL = P.browR = 0.55;
+      } else if (t < 2.6) {
+        P.gaze = c.away(-6, -95);
+        P.pucker = 1;
+        P.pitch = -0.3;
+        P.eyeOpen = 0.8;
+        c.once('blow', () => c.emit('blowLeaf'));
+      } else {
+        P.gaze = c.away(-40, -260);
+        P.headFollow = 0.6;
+        P.smile = 0.8;
+        P.eyeOpen = 1.05;
+        P.tailAmp = 0.5;
+      }
+    },
+  },
+
+  // the moon rabbit is pounding mochi: wave hello
+  moonWave: {
+    caption: 'moonRabbit',
+    pose(t, P, c) {
+      P.gaze = c.target;
+      P.headFollow = 0.9;
+      P.smile = 0.8;
+      P.eyeOpen = 1.08;
+      P.earPerk = 0.7;
+      P.tailAmp = 0.6;
+      P.tailSpeed = 1.8;
+      if (t > 0.3 && t < 2.2) {
+        const w = Math.sin(t * 11);
+        P.armR = { x: 72 + w * 9, y: -60, space: 'head' };
+        P.tilt = w * 3;
+      }
+    },
+  },
+
   // a gust: face into the wind, eyes shut, and enjoy it
   breeze: {
     caption: 'breeze',

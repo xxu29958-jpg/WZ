@@ -13,6 +13,7 @@ import { GardenProps } from './props.js';
 import { Sky } from './sky.js';
 import { Light } from './light.js';
 import { GardenWind } from './wind.js';
+import { GardenNight } from './night.js';
 
 export { PLACES };
 
@@ -73,6 +74,14 @@ export class Scene {
     this.gustNow = null;
     this.autoGusts = true;
     this.nextGustAt = 22 + rng() * 20;
+    // night wonders (shooting stars, a firefly for Kon's nose) — also off for tests
+    this.autoMeteors = true;
+    this.meteor = null;
+    this.fly = null;
+    // Kon, as the scene needs to know it (main.js fills these in every frame)
+    this.konBody = null;
+    this.konSitting = false;
+    this.konStill = false;
     this.buildSky();
     this.buildKasumi();
     this.buildStars();
@@ -410,13 +419,13 @@ export class Scene {
     }
     let newest = null;
     for (const L of this.leaves) {
-      if (L.landed || L.delay > 0) continue;
+      if (L.landed || L.delay > 0 || L.onKon) continue;
       if (!newest || L.born > newest.born) newest = L;
     }
     if (newest && newest.y > this.vb.y) out.push({ id: newest.id, kind: 'leaf', x: newest.x, y: newest.y, sal: 0.48 });
     // leaves lying on the sand: not eye-catching, but Kon may go and pounce on one
     for (const L of this.leaves) {
-      if (L.landed && this.t - L.landedAt < 14 && !L.scattered) out.push({ id: L.id, kind: 'leafGround', x: L.x, y: L.y, sal: 0.05, byVisitor: L.byVisitor });
+      if (L.landed && !L.onKon && this.t - L.landedAt < 14 && !L.scattered) out.push({ id: L.id, kind: 'leafGround', x: L.x, y: L.y, sal: 0.05, byVisitor: L.byVisitor });
     }
     return out;
   }
@@ -444,6 +453,7 @@ export class Scene {
       else this.placeCaption();
     }
     this.updateWind(dt);
+    this.updateNight(dt);
     this.updateProps(dt);
     this.placeKasumi();
     this.light.update(dt, this.sky.p, {
@@ -452,4 +462,4 @@ export class Scene {
   }
 }
 
-mixin(Scene, GardenArt, GardenProps, GardenWind);
+mixin(Scene, GardenArt, GardenProps, GardenWind, GardenNight);

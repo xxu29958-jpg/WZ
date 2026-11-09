@@ -81,15 +81,22 @@ export class Play {
   }
 
   enterBOOPED() {
+    this.act = null;
+    if (this.arg.firefly) {
+      // a firefly landed on Kon's nose: no flinch, just a long cross-eyed stare… and then
+      this.arg.sneeze = true;
+      this.say('fireflyNose', true);
+      return;
+    }
     this.impulse({ type: 'flinch', s: 0.8 });
     this.arg.sneeze = this.rng() < 0.65;
     this.say('booped', true);
     this.emit('sfx', 'boop');
-    this.act = null;
   }
 
   tickBOOPED(dt, s, P) {
-    const t = this.stateT;
+    // (a firefly's visit plays the same scene, with a much longer stare)
+    const t = this.arg.firefly ? (this.stateT < 2.2 ? 0.14 + this.stateT * 0.27 : this.stateT - 1.45) : this.stateT;
     P.headFollow = 0;
     if (t < 0.14) {
       P.shutL = P.shutR = 1;
@@ -120,6 +127,7 @@ export class Play {
           this.impulse({ type: 'sneeze' });
           this.emit('sfx', 'sneeze');
           this.say('sneeze', true);
+          if (this.arg.firefly) this.emit('fireflyGo');
         }
         P.shutL = P.shutR = 1;
         P.shutStyle = 'squeeze';
@@ -146,7 +154,7 @@ export class Play {
   }
 
   enterADMIRE() {
-    this.say('admire', true);
+    this.say(this.arg.star ? 'starWish' : 'admire', true);
     this.act = null;
   }
 

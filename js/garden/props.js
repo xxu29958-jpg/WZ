@@ -52,7 +52,11 @@ export class GardenProps {
     if (t > this.nextLeafAt) {
       const sp = this.mapleSpots[Math.floor(this.rng() * this.mapleSpots.length)];
       const spot = this.mapleToWorld(sp[0], sp[1]);
-      if (spot.x > this.vb.x && spot.x < this.vb.x + this.vb.w) this.dropLeaf(spot.x, spot.y);
+      if (spot.x > this.vb.x && spot.x < this.vb.x + this.vb.w) {
+        this.dropLeaf(spot.x, spot.y);
+        // now and then a leaf finds its way to a fox sitting very still
+        if (this.konStill && !this.leafOnKon && !this.reduced && this.rng() < 0.45) this.leaves[this.leaves.length - 1].aim = true;
+      }
       this.nextLeafAt = t + 16 + this.rng() * 18;
     }
     if (t > this.nextDragonflyAt) {
@@ -66,6 +70,8 @@ export class GardenProps {
     const stop = (e) => e.stopPropagation();
     // raking: press on open sand and drag
     this.app.addEventListener('pointerdown', (e) => {
+      // after dark, the sky has things to catch and poke
+      if (this.skyTap(e.clientX, e.clientY)) return;
       if (this.rake.tryBegin(e, this.toWorld(e.clientX, e.clientY))) {
         try { this.app.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
       }
@@ -163,7 +169,8 @@ export class GardenProps {
     // (on very wide screens little sky shows: keep the moon in it)
     const my = Math.max(p.moon.y, Math.min(400, this.baseVb ? this.baseVb.y + 64 : 0));
     const moon = p.moon.up ? `translate(${f2(p.moon.x)} ${f2(my)})` : 'translate(-999 -999)';
-    if (moon !== this.moonAt) { this.moonAt = moon; $('moon').setAttribute('transform', moon); }
+    this.moonAt = p.moon.up ? { x: p.moon.x, y: my } : null;
+    if (moon !== this.moonKey) { this.moonKey = moon; $('moon').setAttribute('transform', moon); }
     const starsOn = p.stars > 0.004;
     if (starsOn !== this.starsOn) { this.starsOn = starsOn; this.farLayers.stars.style.display = starsOn ? '' : 'none'; }
     const dark = this.dark ? p.stars > 0.4 : p.stars > 0.5;
@@ -242,6 +249,31 @@ export class GardenProps {
     });
   }
 
+  /** A leaf resting on Kon's head: it rides along until Kon moves (or blows it off). */
+  leafOnHead(L, dt) {
+    const crown = this.konBody && this.konBody.crown;
+    if (!crown || !this.konCalm) { this.dropLeafFromKon(L, 0); return; }
+    const ks = this.konBody.scale || 1;
+    L.x = crown.x + 6 * ks;
+    L.y = crown.y - 13 * ks;
+    L.g.setAttribute('transform', `translate(${f2(L.x)} ${f2(L.y)}) rotate(${f2(L.rot)}) scale(${f2(1.25)} ${f2(0.8)})`);
+    L.onT = (L.onT || 0) + dt;
+  }
+
+  /** The leaf leaves Kon's head: slides off, or (blown) flies up first. */
+  dropLeafFromKon(L = this.leafOnKon, up = 0) {
+    if (!L) return;
+    L.onKon = false;
+    L.aim = false;
+    L.landed = false;
+    L.vy = -up;
+    L.vx = up ? 70 : (this.rng() * 2 - 1) * 30;
+    L.landY = Math.max((this.konAt ? this.konAt.y : 830) + 26, 868) + this.rng() * 40;
+    if (this.leafOnKon === L) this.leafOnKon = null;
+  }
+
+  blowLeaf() { this.dropLeafFromKon(this.leafOnKon, 190); }
+
   /** Kon landed on a leaf: it flies up and flutters down again a little way off. */
   scatterLeaf(id) {
     const L = this.leaves.find((l) => l.id === id);
@@ -293,9 +325,9 @@ export class GardenProps {
     };
   }
 
-  launchCrane() {
+  launchCrane(golden = false) {
     if (this.crane) this.crane.g.remove();
-    const g = svgEl('g', {}, $('fx-world'));
+    const g = svgEl('g', { class: golden ? 'crane-gold' : '' }, $('fx-world'));
     const wingBack = svgEl('path', { d: 'M 0,0 L -8,-30 L 14,-4 Z', class: 'crane-fold' }, g);
     svgEl('path', { d: 'M -26,4 L 0,-6 L 24,2 L 4,10 Z', class: 'crane-body' }, g);
     svgEl('path', { d: 'M 20,2 L 34,-18 L 30,-20 L 40,-22 L 36,-16 L 24,4 Z', class: 'crane-body' }, g);
@@ -410,6 +442,7 @@ export class GardenProps {
         if (L.delay <= 0) L.g.style.opacity = '1';
         continue;
       }
+      if (L.onKon) { this.leafOnHead(L, dt); continue; }
       if (!L.landed) {
         const tt = this.t + L.seed;
         L.vy = lerp(L.vy, 84 + Math.sin(tt * 2.2) * 30 - this.wind * 30, 1 - Math.exp(-dt * 3));
@@ -417,6 +450,22 @@ export class GardenProps {
         L.x += (L.vx + Math.sin(tt * 1.7) * 38 - this.wind * 230) * dt;
         L.y += L.vy * dt;
         L.rot += Math.sin(tt * 1.3) * 90 * dt;
+        // an aimed leaf drifts toward Kon's head, and settles there if Kon is still
+        const crown = this.konBody && this.konBody.crown;
+        if (L.aim && crown) {
+          const k = smoothstep(crown.y - 300, crown.y - 60, L.y);
+          L.x += (crown.x - 4 - L.x) * (1 - Math.exp(-dt * 3.2 * k));
+          if (L.y >= crown.y - 6) {
+            if (this.konStill && !this.leafOnKon && Math.abs(L.x - crown.x) < 40) {
+              L.onKon = true;
+              L.rot = -24 + this.rng() * 18;
+              this.leafOnKon = L;
+              this.emit({ type: 'leafOnHead' });
+              continue;
+            }
+            L.aim = false;
+          }
+        }
         if (L.y >= L.landY) {
           L.landed = true;
           L.landedAt = this.t;
@@ -496,6 +545,7 @@ export class GardenProps {
   updateFireflies(dt) {
     const t = this.t;
     for (const f of this.fireflies) {
+      if (this.fly && this.fly.f === f) continue; // (that one is visiting Kon)
       const x = f.x + noise1(t * f.speed, f.seed) * 90;
       const y = f.y + noise1(t * f.speed * 1.2, f.seed + 9) * 60;
       const on = 0.25 + 0.75 * Math.max(0, Math.sin(t * 1.3 + f.seed));

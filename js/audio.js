@@ -138,6 +138,9 @@ export class Sound {
         src.start(t);
         break;
       }
+      case 'mochi': // pon… pon… pon: the moon rabbit's mallet, very far away
+        for (let i = 0; i < 3; i++) this.tone(220, t + i * 0.36, { type: 'triangle', d: 0.12, peak: 0.07, glide: 0.7 });
+        break;
       case 'leaves':
         this.noise(t, { d: 0.35, peak: 0.07, freq: 4500, q: 0.5 });
         break;
