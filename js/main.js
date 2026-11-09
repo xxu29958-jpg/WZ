@@ -38,6 +38,19 @@ const manual = params.has('manual') || !!demo;
 // scripted checks use repeatable randomness
 const rngFor = (k) => (manual ? makeRng((+params.get('seed') || 7) + k) : Math.random);
 if (manual) document.body.classList.add('frozen');
+// arriving: the garden fades in from the paper (not in tests, not with reduced motion),
+// once the fonts are in (or after a moment, whichever is first), so nothing visibly swaps
+else if (!reduced()) {
+  const body = document.body;
+  body.classList.add('arriving');
+  const reveal = () => {
+    if (!body.classList.contains('arriving')) return;
+    body.classList.replace('arriving', 'intro');
+    setTimeout(() => body.classList.remove('intro'), 3400);
+  };
+  document.fonts?.ready.then(reveal);
+  setTimeout(reveal, 1200);
+}
 
 const sound = new Sound();
 let input; // created after the scene, which it needs for coordinates

@@ -301,6 +301,24 @@ html, body {
 .is-dark #fireflies, .is-dark #cursor-firefly { opacity: 1; }
 .lantern-window { fill: color-mix(in srgb, #ffcf6b calc(var(--lamp, 0) * 100%), #6f6a5e); }
 
+/* ---------- arrival: fade in from the paper while the camera settles back ---------- */
+#curtain { position: absolute; inset: 0; z-index: 40; background: var(--paper); pointer-events: none; opacity: 0; }
+.arriving #curtain { opacity: 1; }
+.arriving .brand, .arriving .corner, .arriving #wish { opacity: 0; }
+.intro #curtain { animation: curtain-up 1.5s ease-out .1s both; }
+@keyframes curtain-up { from { opacity: 1; } to { opacity: 0; } }
+/* each depth settles by a different amount: a little dolly shot through the parallax */
+.intro #layer-hills, .intro #layer-kasumi, .intro #layer-stars { animation: settle-far 2.8s cubic-bezier(.2, .7, .2, 1) both; }
+.intro #layer-trees, .intro #layer-wall { animation: settle-mid 2.8s cubic-bezier(.2, .7, .2, 1) both; }
+.intro #world-layers, .intro #glow, .intro #shade, .intro #sunlight { animation: settle-near 2.8s cubic-bezier(.2, .7, .2, 1) both; }
+.intro #layer-maple { animation: settle-maple 3s cubic-bezier(.2, .7, .2, 1) both; }
+.intro .brand, .intro .corner, .intro #wish { animation: ui-in 1s ease-out 1.1s both; }
+@keyframes settle-far { from { scale: 1.025; } to { scale: 1; } }
+@keyframes settle-mid { from { scale: 1.045; } to { scale: 1; } }
+@keyframes settle-near { from { scale: 1.07; } to { scale: 1; } }
+@keyframes settle-maple { from { scale: 1.16; opacity: .4; } to { scale: 1; opacity: 1; } }
+@keyframes ui-in { from { opacity: 0; } to { opacity: 1; } }
+
 /* ---------- branding ---------- */
 .brand {
   position: absolute;
