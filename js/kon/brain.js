@@ -56,6 +56,8 @@ export function neutralPose() {
 
 // narrator keys that map to a different voice key, and voice lines that may interrupt
 const VOICE_ALIAS = { lifeRack: 'readPlaques', classic: 'startled', cover: 'startled', pout: 'startled', bleh: 'startled', admireAfter: 'typingStop' };
+// lines about a moment the visitor made happen (or a rare one): Kon's reflexes don't talk over them
+const PRECIOUS = new Set(['moonRabbit', 'starCaught', 'starWish', 'meteor', 'fireflyNose', 'leafHat', 'lapseNight', 'lapseDay', 'birdOnHead']);
 const URGENT_VOICE = new Set(['startled', 'gotcha', 'sneeze', 'booped', 'satoriEnd', 'pounceMiss', 'pounceBird', 'birdEscaped', 'typingWalk', 'typingStop']);
 const REACTIVE = new Set(['IDLE', 'WATCH', 'PRETENDING', 'RESUMING', 'RELAXING', 'DROWSY']);
 const ACTIVITY_EVENTS = new Set(['down', 'tap', 'focus', 'input', 'boop', 'pat', 'rakeStart', 'submit']);
@@ -179,6 +181,8 @@ export class Brain {
     const lines = CAPTIONS[key];
     if (!lines) return;
     if (!force && this.caption.key === key) return;
+    // (only something new happening replaces it, not Kon's own reflexes)
+    if (PRECIOUS.has(this.caption.key) && !this.inEvent && this.now - this.caption.at < (this.caption.hold || 0)) return;
     let line = pick(this.rng, lines);
     if (lines.length > 1 && line === this.lastLines[key]) line = lines[(lines.indexOf(line) + 1) % lines.length];
     this.lastLines[key] = line;
@@ -261,7 +265,9 @@ export class Brain {
     }
 
     this.sense(dt, s);
+    this.inEvent = true;
     for (const ev of s.events) this.onEvent(ev, s);
+    this.inEvent = false;
     this.arbitrate(dt, s);
     if (this.reactive()) this.detect(dt, s);
 

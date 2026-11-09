@@ -55,7 +55,8 @@ export class GardenProps {
       if (spot.x > this.vb.x && spot.x < this.vb.x + this.vb.w) {
         this.dropLeaf(spot.x, spot.y);
         // now and then a leaf finds its way to a fox sitting very still
-        if (this.konStill && !this.leafOnKon && !this.reduced && this.rng() < 0.45) this.leaves[this.leaves.length - 1].aim = true;
+        const birdOnKon = this.visitor && this.visitor.perch?.id === 'kon' && this.visitor.state !== 'flyAway';
+        if (this.konStill && !this.leafOnKon && !birdOnKon && !this.reduced && this.rng() < 0.45) this.leaves[this.leaves.length - 1].aim = true;
       }
       this.nextLeafAt = t + 16 + this.rng() * 18;
     }
@@ -463,7 +464,8 @@ export class GardenProps {
           const k = smoothstep(crown.y - 300, crown.y - 60, L.y);
           L.x += (crown.x - 4 - L.x) * (1 - Math.exp(-dt * 3.2 * k));
           if (L.y >= crown.y - 6) {
-            if (this.konStill && !this.leafOnKon && Math.abs(L.x - crown.x) < 40) {
+            const birdOnKon = this.visitor && this.visitor.perch?.id === 'kon' && this.visitor.state !== 'flyAway';
+            if (this.konStill && !this.leafOnKon && !birdOnKon && Math.abs(L.x - crown.x) < 40) {
               L.onKon = true;
               L.rot = -24 + this.rng() * 18;
               this.leafOnKon = L;
