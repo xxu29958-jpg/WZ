@@ -16,7 +16,8 @@ export class Face {
     // ---- eyes ----
     this.updateBlink(dt, P);
     this.updateSaccade(dt, P);
-    const eyeOpen = s.eyeOpen.step(dt, P.eyeOpen ?? 1);
+    // a gust in the face: squint a little
+    const eyeOpen = s.eyeOpen.step(dt, (P.eyeOpen ?? 1) * (1 - 0.32 * smoothstep(0.35, 1, this.wind || 0)));
     const irisS = s.iris.step(dt, P.iris ?? 1);
     const pupilS = s.pupil.step(dt, P.pupil ?? 1);
     const lidL = s.lidL.step(dt, P.lidL ?? 0.1);

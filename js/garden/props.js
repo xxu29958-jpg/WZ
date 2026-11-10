@@ -6,6 +6,11 @@
 import { clamp, lerp, smoothstep, DEG, noise1 } from '../math.js';
 import { $, f2, svgEl } from '../util.js';
 import { PLACES } from './world.js';
+import { periodOf } from './sky.js';
+
+// where a lantern click takes the clock: well into the night, or a fresh morning
+const NIGHT_HOUR = 22.6;   // (on a laptop screen, the full moon rises behind the pagoda)
+const MORNING_HOUR = 7.9;
 import { LEAF_COLORS } from './art.js';
 
 export class GardenProps {
@@ -17,11 +22,12 @@ export class GardenProps {
     this.updateLeaves(dt);
     this.updateDragonfly(dt);
     this.updateCrane(dt);
-    if (this.night) this.updateFireflies(dt);
+    if (this.dark || this.sky.p.stars > 0.05) this.updateFireflies(dt);
 
     // flower
     const fb = this.flowerBob.step(dt, 0);
-    $('flower-stem').setAttribute('transform', `translate(660 826) rotate(${f2(fb * 0.12 + Math.sin(t * 1.1) * 1.2)})`);
+    const lean = -this.wind * 9;
+    $('flower-stem').setAttribute('transform', `translate(660 826) rotate(${f2(fb * 0.12 + Math.sin(t * 1.1) * 1.2 * (1 + this.wind * 3) + lean)})`);
     $('flower-head').setAttribute('transform', `translate(10 -54) rotate(${f2(fb * 0.3)})`);
 
     // ema
@@ -34,17 +40,24 @@ export class GardenProps {
     $('snail-body').setAttribute('transform', `translate(${f2(-sn * 6 + crawl)} 0) scale(${f2(1 - sn * 0.75)} ${f2(1 - sn * 0.4)})`);
 
     // lantern flicker
-    if (this.night) {
+    const lamp = this.sky.p.lamp;
+    if (lamp > 0.01) {
       const fl = 0.85 + 0.1 * noise1(t * 3.1) + 0.05 * noise1(t * 11, 3);
-      $('lantern-halo').setAttribute('r', f2(230 + fl * 20));
-      $('lantern-halo').style.opacity = f2(fl);
+      this.lampFlicker = fl;
+      $('lantern-halo').setAttribute('r', f2(200 + fl * 20));
+      $('lantern-halo').style.opacity = f2(fl * lamp);
     }
 
     // auto events
     if (t > this.nextLeafAt) {
       const sp = this.mapleSpots[Math.floor(this.rng() * this.mapleSpots.length)];
       const spot = this.mapleToWorld(sp[0], sp[1]);
-      if (spot.x > this.vb.x && spot.x < this.vb.x + this.vb.w) this.dropLeaf(spot.x, spot.y);
+      if (spot.x > this.vb.x && spot.x < this.vb.x + this.vb.w) {
+        this.dropLeaf(spot.x, spot.y);
+        // now and then a leaf finds its way to a fox sitting very still
+        const birdOnKon = this.visitor && this.visitor.perch?.id === 'kon' && this.visitor.state !== 'flyAway';
+        if (this.konStill && !this.leafOnKon && !birdOnKon && !this.reduced && this.rng() < 0.45) this.leaves[this.leaves.length - 1].aim = true;
+      }
       this.nextLeafAt = t + 16 + this.rng() * 18;
     }
     if (t > this.nextDragonflyAt) {
@@ -58,6 +71,8 @@ export class GardenProps {
     const stop = (e) => e.stopPropagation();
     // raking: press on open sand and drag
     this.app.addEventListener('pointerdown', (e) => {
+      // after dark, the sky has things to catch and poke
+      if (this.skyTap(e.clientX, e.clientY)) return;
       if (this.rake.tryBegin(e, this.toWorld(e.clientX, e.clientY))) {
         try { this.app.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
       }
@@ -96,27 +111,73 @@ export class GardenProps {
     keyClick('maple', () => this.shakeMaple(null));
   }
 
+  /**
+   * The lantern doesn't flip a switch: it runs the clock. Lighting it lets the
+   * sun go down and the moon come up; putting it out runs through the small
+   * hours into the morning. (Clicked again mid-way, the clock runs back.)
+   * Night itself (and Kon's reaction to it) arrives when the sky gets dark.
+   */
   toggleNight(force) {
-    this.night = force ?? !this.night;
-    document.body.classList.toggle('is-night', this.night);
-    document.querySelector('meta[name="theme-color"]').setAttribute('content', this.night ? '#2a2f4a' : '#f1e7d3');
-    this.emit({ type: 'night', on: this.night });
+    const goal = force ?? !(this.sky.lapsing ? this.goal : this.night);
+    const back = this.sky.lapsing && goal !== this.goal && this.lapseFrom !== undefined;
+    this.goal = goal;
+    if (back) this.sky.lapseTo(this.lapseFrom, 2.4, { back: true });
+    else {
+      this.lapseFrom = this.sky.hour;
+      this.sky.lapseTo(goal ? NIGHT_HOUR : MORNING_HOUR, goal ? 8 : 6.5);
+    }
+    if (!this.sky.lapsing) this.setNight(goal, true);
+    const b = this.baseVb || { x: 0, w: 1600 };
+    // where to look: the sun going down, or the moon going away
+    const at = goal ? { x: b.x + b.w * 0.86, y: 330 } : { x: b.x + b.w * 0.5, y: 280 };
+    this.emit({ type: 'lapse', to: goal ? 'night' : 'day', x: at.x, y: at.y, back });
     this.emit({ type: 'sfx', name: 'lantern' });
   }
 
-  /** Follow the visitor's local time: dawn, day, dusk or night. */
+  /** Night falls (or lifts). `announce`: tell Kon (a lantern time-lapse got there). */
+  setNight(night, announce = false) {
+    if (night === this.night) return;
+    this.night = night;
+    document.body.classList.toggle('is-night', night);
+    document.querySelector('meta[name="theme-color"]').setAttribute('content', night ? '#2a2f4a' : '#f1e7d3');
+    if (announce) this.emit({ type: 'night', on: night });
+  }
+
+  /** Follow the visitor's local time (plus however far the lantern has moved the clock). */
   setTimeOfDay(hour) {
-    const night = hour < 5.5 || hour >= 19;
-    const dusk = hour >= 17 && hour < 19;
-    const dawn = hour >= 5.5 && hour < 7.5;
-    document.body.classList.toggle('is-dusk', dusk);
-    document.body.classList.toggle('is-dawn', dawn);
-    if (night && !this.night) {
-      this.night = true;
-      document.body.classList.add('is-night');
-      document.querySelector('meta[name="theme-color"]').setAttribute('content', '#2a2f4a');
-    }
-    return night ? 'night' : dusk ? 'dusk' : dawn ? 'dawn' : 'day';
+    if (this.sky.lapsing) return periodOf(this.sky.hour);
+    this.sky.set(hour + this.clockOffset);
+    if (this.sky.night !== this.night) this.setNight(this.sky.night);
+    const period = this.sky.period;
+    document.body.classList.toggle('is-dusk', period === 'dusk');
+    document.body.classList.toggle('is-dawn', period === 'dawn');
+    return period;
+  }
+
+  followClock() {
+    if (this.clock) this.setTimeOfDay(this.clock());
+  }
+
+  /** The sun and the moon on their arcs; stars and the dark-mode UI with the light. */
+  updateSkyBodies() {
+    const p = this.sky.p;
+    // sun and moon arcs are given as fractions of the screen's width
+    const b = this.baseVb || { x: 0, w: 1600 };
+    p.sun.x = b.x + b.w * p.sun.fx;
+    p.moon.x = b.x + b.w * p.moon.fx;
+    const sun = p.sun.up ? `translate(${f2(p.sun.x)} ${f2(p.sun.y)})` : 'translate(-999 -999)';
+    if (sun !== this.sunAt) { this.sunAt = sun; $('sun').setAttribute('transform', sun); }
+    // (on very wide screens little sky shows: keep the moon in it)
+    const my = Math.max(p.moon.y, Math.min(400, this.baseVb ? this.baseVb.y + 64 : 0));
+    const moon = p.moon.up ? `translate(${f2(p.moon.x)} ${f2(my)})` : 'translate(-999 -999)';
+    this.moonAt = p.moon.up ? { x: p.moon.x, y: my } : null;
+    if (moon !== this.moonKey) { this.moonKey = moon; $('moon').setAttribute('transform', moon); }
+    const starsOn = p.stars > 0.004;
+    if (starsOn !== this.starsOn) { this.starsOn = starsOn; this.farLayers.stars.style.display = starsOn ? '' : 'none'; }
+    const dark = this.dark ? p.stars > 0.4 : p.stars > 0.5;
+    if (dark !== this.dark) { this.dark = dark; document.body.classList.toggle('is-dark', dark); }
+    // a lantern time-lapse: night begins (or ends) when the sky says so
+    if (this.sky.lapsing && this.goal !== undefined && dark === this.goal) this.setNight(this.goal, true);
   }
 
   /** At night the cursor becomes a firefly, trailing a little light. */
@@ -189,6 +250,31 @@ export class GardenProps {
     });
   }
 
+  /** A leaf resting on Kon's head: it rides along until Kon moves (or blows it off). */
+  leafOnHead(L, dt) {
+    const crown = this.konBody && this.konBody.crown;
+    if (!crown || !this.konCalm) { this.dropLeafFromKon(L, 0); return; }
+    const ks = this.konBody.scale || 1;
+    L.x = crown.x + 6 * ks;
+    L.y = crown.y - 13 * ks;
+    L.g.setAttribute('transform', `translate(${f2(L.x)} ${f2(L.y)}) rotate(${f2(L.rot)}) scale(${f2(1.25)} ${f2(0.8)})`);
+    L.onT = (L.onT || 0) + dt;
+  }
+
+  /** The leaf leaves Kon's head: slides off, or (blown) flies up first. */
+  dropLeafFromKon(L = this.leafOnKon, up = 0) {
+    if (!L) return;
+    L.onKon = false;
+    L.aim = false;
+    L.landed = false;
+    L.vy = -up;
+    L.vx = up ? 70 : (this.rng() * 2 - 1) * 30;
+    L.landY = Math.max((this.konAt ? this.konAt.y : 830) + 26, 868) + this.rng() * 40;
+    if (this.leafOnKon === L) this.leafOnKon = null;
+  }
+
+  blowLeaf() { this.dropLeafFromKon(this.leafOnKon, 190); }
+
   /** Kon landed on a leaf: it flies up and flutters down again a little way off. */
   scatterLeaf(id) {
     const L = this.leaves.find((l) => l.id === id);
@@ -240,9 +326,9 @@ export class GardenProps {
     };
   }
 
-  launchCrane() {
+  launchCrane(golden = false) {
     if (this.crane) this.crane.g.remove();
-    const g = svgEl('g', {}, $('fx-world'));
+    const g = svgEl('g', { class: golden ? 'crane-gold' : '' }, $('fx-world'));
     const wingBack = svgEl('path', { d: 'M 0,0 L -8,-30 L 14,-4 Z', class: 'crane-fold' }, g);
     svgEl('path', { d: 'M -26,4 L 0,-6 L 24,2 L 4,10 Z', class: 'crane-body' }, g);
     svgEl('path', { d: 'M 20,2 L 34,-18 L 30,-20 L 40,-22 L 36,-16 L 24,4 Z', class: 'crane-body' }, g);
@@ -318,6 +404,13 @@ export class GardenProps {
     }
     const rip = $('basin-ripple');
     rip.setAttribute('transform', `translate(0 ${f2(Math.sin(this.t * 1.7) * 0.8)})`);
+    // the moon's reflection shivers on the water (and hides when Kon leans over it to drink)
+    if (this.sky.p.stars > 0.05) {
+      const m = $('basin-moon');
+      const near = this.konAt && Math.hypot(this.konAt.x - 470, this.konAt.y - 890) < 150;
+      m.style.display = near || !this.moonAt ? 'none' : '';
+      m.setAttribute('rx', f2(7 + Math.sin(this.t * 2.3) * 1.1 + (this.waterDrops.length ? 1.5 : 0)));
+    }
   }
 
   spawnDrop(x, y, tx, ty, splash = false) {
@@ -330,7 +423,8 @@ export class GardenProps {
     const sk = this.mapleShake.step(dt, 0);
     const t = this.t;
     // the gentle sway is a rotation of the whole layer: composited, never redrawn
-    const sway = Math.sin(t * 0.55) * 0.35 + sk * 1.6;
+    const sway = Math.sin(t * 0.55) * 0.35 + sk * 1.6 + this.wind * (0.7 + 0.5 * Math.sin(t * 3.1));
+    this.mapleSwayDeg = sway;
     $('layer-maple').style.transform = `rotate(${sway.toFixed(3)}deg)`;
     // single leaves only flutter while the branch is actually being shaken
     if (this.reduced || (Math.abs(sk) < 0.01 && Math.abs(this.mapleShake.v) < 0.05)) {
@@ -356,12 +450,31 @@ export class GardenProps {
         if (L.delay <= 0) L.g.style.opacity = '1';
         continue;
       }
+      if (L.onKon) { this.leafOnHead(L, dt); continue; }
       if (!L.landed) {
         const tt = this.t + L.seed;
-        L.vy = lerp(L.vy, 84 + Math.sin(tt * 2.2) * 30, 1 - Math.exp(-dt * 3));
-        L.x += (L.vx + Math.sin(tt * 1.7) * 38) * dt;
+        L.vy = lerp(L.vy, 84 + Math.sin(tt * 2.2) * 30 - this.wind * 30, 1 - Math.exp(-dt * 3));
+        // the wind carries leaves off to the left
+        L.x += (L.vx + Math.sin(tt * 1.7) * 38 - this.wind * 230) * dt;
         L.y += L.vy * dt;
         L.rot += Math.sin(tt * 1.3) * 90 * dt;
+        // an aimed leaf drifts toward Kon's head, and settles there if Kon is still
+        const crown = this.konBody && this.konBody.crown;
+        if (L.aim && crown) {
+          const k = smoothstep(crown.y - 300, crown.y - 60, L.y);
+          L.x += (crown.x - 4 - L.x) * (1 - Math.exp(-dt * 3.2 * k));
+          if (L.y >= crown.y - 6) {
+            const birdOnKon = this.visitor && this.visitor.perch?.id === 'kon' && this.visitor.state !== 'flyAway';
+            if (this.konStill && !this.leafOnKon && !birdOnKon && Math.abs(L.x - crown.x) < 40) {
+              L.onKon = true;
+              L.rot = -24 + this.rng() * 18;
+              this.leafOnKon = L;
+              this.emit({ type: 'leafOnHead' });
+              continue;
+            }
+            L.aim = false;
+          }
+        }
         if (L.y >= L.landY) {
           L.landed = true;
           L.landedAt = this.t;
@@ -369,6 +482,13 @@ export class GardenProps {
         L.g.setAttribute('transform', `translate(${f2(L.x)} ${f2(L.y)}) rotate(${f2(L.rot)}) scale(1 ${f2(0.75 + 0.25 * Math.sin(tt * 3))})`);
       } else {
         const age = this.t - L.landedAt;
+        // a strong gust sends fallen leaves skittering over the sand
+        if (this.wind > 0.4 && !this.reduced) {
+          const push = (this.wind - 0.4) * 110 * (0.6 + 0.4 * Math.sin(L.seed * 7));
+          L.x -= push * dt;
+          L.rot -= push * 2.2 * dt;
+          L.g.setAttribute('transform', `translate(${f2(L.x)} ${f2(L.y)}) rotate(${f2(L.rot)}) scale(1 0.5)`);
+        }
         if (age < 0.4) L.g.setAttribute('transform', `translate(${f2(L.x)} ${f2(L.y)}) rotate(${f2(L.rot)}) scale(1 ${f2(lerp(0.75, 0.5, age / 0.4))})`);
         if (age > 16) L.g.style.opacity = f2(1 - (age - 16) / 2);
         if (age > 18) {
@@ -434,12 +554,14 @@ export class GardenProps {
   updateFireflies(dt) {
     const t = this.t;
     for (const f of this.fireflies) {
+      if (this.fly && this.fly.f === f) continue; // (that one is visiting Kon)
       const x = f.x + noise1(t * f.speed, f.seed) * 90;
       const y = f.y + noise1(t * f.speed * 1.2, f.seed + 9) * 60;
       const on = 0.25 + 0.75 * Math.max(0, Math.sin(t * 1.3 + f.seed));
       f.el.setAttribute('cx', f2(x));
       f.el.setAttribute('cy', f2(y));
       f.el.style.opacity = f2(on);
+      f.cx = x; f.cy = y; f.on = on;
     }
   }
 }

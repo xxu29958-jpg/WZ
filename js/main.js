@@ -38,6 +38,19 @@ const manual = params.has('manual') || !!demo;
 // scripted checks use repeatable randomness
 const rngFor = (k) => (manual ? makeRng((+params.get('seed') || 7) + k) : Math.random);
 if (manual) document.body.classList.add('frozen');
+// arriving: the garden fades in from the paper (not in tests, not with reduced motion),
+// once the fonts are in (or after a moment, whichever is first), so nothing visibly swaps
+else if (!reduced()) {
+  const body = document.body;
+  body.classList.add('arriving');
+  const reveal = () => {
+    if (!body.classList.contains('arriving')) return;
+    body.classList.replace('arriving', 'intro');
+    setTimeout(() => body.classList.remove('intro'), 3400);
+  };
+  document.fonts?.ready.then(reveal);
+  setTimeout(reveal, 1200);
+}
 
 const sound = new Sound();
 let input; // created after the scene, which it needs for coordinates
@@ -71,6 +84,10 @@ const brain = new Brain({ reducedMotion: reduced(), rng: rngFor(2) });
 // a sparrow drops by now and then (scripted checks call it in with ?birds or __zen.birds.visit())
 const birds = new Birds({ parent: $('depth'), rng: rngFor(5), reduced: reduced(), auto: !manual || params.has('birds') });
 scene.visitor = birds;
+// gusts of wind come on their own (scripted checks call them with ?wind or __zen.scene.gust())
+scene.autoGusts = !manual || params.has('wind');
+// …and so do shooting stars and curious fireflies after dark (?meteors, or __zen.scene.spawnMeteor())
+scene.autoMeteors = !manual || params.has('meteors');
 
 reducedMQ.addEventListener?.('change', () => {
   rig.setReducedMotion(reduced());
@@ -189,6 +206,7 @@ const hourNow = () => {
   const d = new Date();
   return d.getHours() + d.getMinutes() / 60;
 };
+scene.clock = hourNow;
 let period = scene.setTimeOfDay(hourNow());
 if (period !== 'day') input.push({ type: 'daytime', period });
 if (!manual) {
@@ -228,7 +246,9 @@ function tick(dt, ts) {
   for (const ev of senses.events) {
     if (ev.type === 'input') scene.nudgeEma(ev.del ? 0.4 : 0.7);
     if (ev.type === 'submit') {
-      scene.launchCrane();
+      // a wish sent while a caught star still glows leaves on a golden crane
+      if (scene.starlit) { ev.star = true; scene.starlitUntil = scene.t + 0.01; }
+      scene.launchCrane(ev.star);
       if (coarseMQ.matches) wishInput.blur();
     }
   }
@@ -239,6 +259,7 @@ function tick(dt, ts) {
   if (bird) senses.objects.push(bird);
   senses.places = scene.places;
   senses.night = scene.night;
+  senses.leafOnHead = !!scene.leafOnKon;
   senses.layout = scene.mode;
 
   const pose = brain.update(dt, senses);
@@ -260,7 +281,10 @@ function tick(dt, ts) {
     else if (em.type === 'ensoScore') { memory.bestEnso = Math.max(memory.bestEnso || 0, em.data); if (!manual) saveMemory(memory); }
     else if (em.type === 'scatterLeaf') scene.scatterLeaf(em.data);
     else if (em.type === 'snailPoke') scene.hideSnail();
+    else if (em.type === 'blowLeaf') scene.blowLeaf();
+    else if (em.type === 'fireflyGo') scene.fireflyGo();
   }
+  rig.wind = scene.wind;
   rig.update(dt, pose, where);
   const body = rig.measure();
   const clack = senses.events.some((e) => e.type === 'clack');
@@ -270,11 +294,19 @@ function tick(dt, ts) {
     input.push(ev);
   }
   scene.placeKon(where);
+  // what the garden needs to know about Kon: where its head is, and whether it's sitting still
+  const settled = !where.moving && !where.airborne;
+  scene.konBody = body;
+  scene.konMoving = !settled;
+  scene.konSitting = settled && !!where.seat && brain.state === 'IDLE' && !brain.life.act;
+  scene.konStill = settled && (brain.isStill() || scene.konSitting);
+  scene.konCalm = settled && !['STARTLED', 'POUNCE', 'DIZZY', 'SATORI', 'WAKING', 'BOOPED', 'JUDGE'].includes(brain.state);
   scene.update(dt);
   scene.zen.update(dt, brain.zenInfo(), body.center);
   scene.updateCursor(dt, input.pointer);
   updateCaption();
   updateVoice(body);
+  sound.ambient(dt, { dark: scene.dark });
 
   if (showDebug && ts - debugAt > 100) {
     debugAt = ts;

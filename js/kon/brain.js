@@ -56,6 +56,8 @@ export function neutralPose() {
 
 // narrator keys that map to a different voice key, and voice lines that may interrupt
 const VOICE_ALIAS = { lifeRack: 'readPlaques', classic: 'startled', cover: 'startled', pout: 'startled', bleh: 'startled', admireAfter: 'typingStop' };
+// lines about a moment the visitor made happen (or a rare one): Kon's reflexes don't talk over them
+const PRECIOUS = new Set(['moonRabbit', 'starCaught', 'starWish', 'meteor', 'fireflyNose', 'leafHat', 'lapseNight', 'lapseDay', 'birdOnHead']);
 const URGENT_VOICE = new Set(['startled', 'gotcha', 'sneeze', 'booped', 'satoriEnd', 'pounceMiss', 'pounceBird', 'birdEscaped', 'typingWalk', 'typingStop']);
 const REACTIVE = new Set(['IDLE', 'WATCH', 'PRETENDING', 'RESUMING', 'RELAXING', 'DROWSY']);
 const ACTIVITY_EVENTS = new Set(['down', 'tap', 'focus', 'input', 'boop', 'pat', 'rakeStart', 'submit']);
@@ -179,6 +181,8 @@ export class Brain {
     const lines = CAPTIONS[key];
     if (!lines) return;
     if (!force && this.caption.key === key) return;
+    // (only something new happening replaces it, not Kon's own reflexes)
+    if (PRECIOUS.has(this.caption.key) && !this.inEvent && this.now - this.caption.at < (this.caption.hold || 0)) return;
     let line = pick(this.rng, lines);
     if (lines.length > 1 && line === this.lastLines[key]) line = lines[(lines.indexOf(line) + 1) % lines.length];
     this.lastLines[key] = line;
@@ -261,7 +265,9 @@ export class Brain {
     }
 
     this.sense(dt, s);
+    this.inEvent = true;
     for (const ev of s.events) this.onEvent(ev, s);
+    this.inEvent = false;
     this.arbitrate(dt, s);
     if (this.reactive()) this.detect(dt, s);
 
@@ -497,7 +503,7 @@ export class Brain {
       case 'submit':
         this.lastActive = this.now;
         this.typeBurst = 0;
-        if (this.state !== 'SLEEPING') this.go('ADMIRE');
+        if (this.state !== 'SLEEPING') this.go('ADMIRE', { star: !!ev.star });
         break;
       case 'clack':
         this.onClack(ev);
@@ -514,6 +520,60 @@ export class Brain {
         break;
       case 'birdChirp':
         if (!asleep && this.reactive()) this.impulse({ type: 'earFlick', side: ev.x < (s.self ? s.self.x : 800) ? 'l' : 'r', s: 0.35 });
+        break;
+      case 'gust':
+        // a gust: ears flick; and when there's nothing better to do, Kon enjoys it
+        if (asleep) { this.impulse({ type: 'earFlick', side: 'r', s: 0.6 }); break; }
+        // (it pauses whatever Kon is doing on the spot, but not a walk somewhere)
+        if (this.state === 'IDLE' && !this.greet && !(s.self && (s.self.moving || s.self.airborne)) &&
+            !(this.life.act && ['bird', 'leaf', 'home'].includes(this.life.act.id)) && this.rng() < 0.65) {
+          if (this.life.act) this.dropLife(4);
+          this.idleAct = this.makeAct('breeze', { dur: 3.6 });
+          this.say('breeze');
+        } else if (this.reactive()) this.impulse({ type: 'earFlick', side: 'r', s: 0.5 });
+        break;
+      case 'meteor':
+        // a shooting star: Kon looks up, and if nothing else is going on, makes a wish
+        if (asleep || this.state === 'ZAZEN' || this.state === 'SATORI') break;
+        this.flash = { x: ev.x, y: ev.y, until: this.now + 1.2 };
+        if (this.state === 'IDLE' && !this.greet && !(s.self && s.self.moving) && !(this.life.act && ['bird', 'home'].includes(this.life.act.id))) {
+          if (this.life.act) this.dropLife(4);
+          this.idleAct = this.makeAct('wishStar', { dur: 3.6 });
+          this.say('meteor', true);
+        }
+        break;
+      case 'starCaught':
+        if (!asleep) {
+          const a = s.typing && s.typing.anchor;
+          if (a) this.flash = { x: a.x, y: a.y, until: this.now + 1.6, sparkle: true };
+          this.say('starCaught', true);
+        }
+        break;
+      case 'moonPoke':
+        if (asleep) break;
+        this.flash = { x: ev.x, y: ev.y, until: this.now + 2.4 };
+        if (this.state === 'IDLE' && !this.greet && !(s.self && s.self.moving)) {
+          if (this.life.act && this.life.act.id !== 'bird') this.dropLife(4);
+          this.idleAct = this.makeAct('moonWave', { dur: 2.6 });
+        }
+        this.say('moonRabbit', true);
+        break;
+      case 'fireflyNose':
+        if (this.state === 'IDLE' || this.state === 'OBSERVING' || this.state === 'RELAXING') this.go('BOOPED', { firefly: true });
+        break;
+      case 'leafOnHead':
+        if (this.state === 'ZAZEN') this.say('leafOnHeadZen', true);
+        else if (this.state === 'IDLE' && !this.greet) {
+          this.idleAct = this.makeAct('leafHat', { dur: 3.6 });
+          this.say('leafHat', true);
+        }
+        break;
+      case 'lapse':
+        // the lantern runs the clock: Kon turns to watch the sky change
+        if (!asleep) {
+          this.flash = { x: ev.x, y: ev.y, until: this.now + 3.2 };
+          this.say(ev.to === 'night' ? 'lapseNight' : 'lapseDay', true);
+        }
         break;
       case 'night':
         if (!asleep) {

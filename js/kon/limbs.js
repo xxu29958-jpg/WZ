@@ -141,7 +141,7 @@ export class Limbs {
     this.tailPhase += dt * TAU * this.tailSpeed;
     // walking, the tail is carried higher and swings more
     const walking = this.walk ? this.walk.n : 0;
-    const amp = s.tailAmp.step(dt, ((P.tailAmp ?? 0.15) + walking * 0.3) * (this.reduced ? 0.4 : 1));
+    const amp = s.tailAmp.step(dt, ((P.tailAmp ?? 0.15) + walking * 0.3 + (this.wind || 0) * 0.35) * (this.reduced ? 0.4 : 1));
     const base = s.tailBase.step(dt, (P.tailBase || 0) - walking * 12);
     const curl = s.tailCurl.step(dt, P.tailCurl || 0);
 

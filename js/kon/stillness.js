@@ -65,7 +65,7 @@ export class Stillness {
     P.blink = false;
     P.browL = P.browR = 0.25;
     const bird = this.bird(s);
-    if (bird && bird.perch === 'kon' && bird.state === 'perched') this.birdOnHeadFace(st, P);
+    if ((bird && bird.perch === 'kon' && bird.state === 'perched') || s.leafOnHead) this.birdOnHeadFace(st, P);
     if (z.paint > 0.55 && !z.said.half) { z.said.half = true; this.say('zazenHalf', true); }
     if (z.paint > 0.85 && !z.said.almost) { z.said.almost = true; this.say('zazenAlmost', true); }
     if (z.paint >= 1) this.go('SATORI');
