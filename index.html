@@ -58,6 +58,18 @@
       <!-- distant hills in layers of haze, a pagoda, and mist (generated) -->
       <g id="sky" aria-hidden="true"></g>
   </svg>
+  <!-- the weather's own layer: an overcast veil, the rainbow, and clouds drifting over (js/garden/weather.js) -->
+  <svg id="layer-clouds" class="far-layer" viewBox="0 0 1600 1000" aria-hidden="true">
+    <defs>
+      <linearGradient id="overcast-grad" gradientUnits="userSpaceOnUse" x1="0" y1="180" x2="0" y2="470">
+        <stop offset="0" class="overcast-stop" stop-opacity="1"/>
+        <stop offset="1" class="overcast-stop" stop-opacity=".5"/>
+      </linearGradient>
+    </defs>
+    <rect class="overcast" x="-1500" y="-1200" width="4600" height="1670" fill="url(#overcast-grad)"/>
+    <g id="rainbow" style="display:none"></g>
+    <g id="clouds"></g>
+  </svg>
   <!-- the valley below the terrace: a lake with a village, a path of torii gates, the forest (js/garden/vista.js) -->
   <svg id="layer-valley" class="far-layer" viewBox="0 0 1600 1000" aria-hidden="true">
     <defs>
@@ -103,8 +115,13 @@
       <g id="sand" aria-hidden="true">
         <rect x="-1500" y="700" width="4600" height="1800" class="c-sand"/>
         <rect x="-1500" y="700" width="4600" height="900" fill="#000" filter="url(#grain-sand)" class="paper-grain"/>
+        <!-- rain darkens the sand; snow whitens it (the raked lines show through both) -->
+        <rect id="wet-sand" x="-1500" y="700" width="4600" height="1800" class="wet-sand" style="opacity:0"/>
         <g id="rake"></g>
         <g id="rings"></g>
+        <rect id="snow-sand" x="-1500" y="700" width="4600" height="1800" class="snow-sand"/>
+        <!-- puddles collect in the hollows when it rains (js/garden/weather.js) -->
+        <g id="puddles"></g>
         <!-- soft contact shadows: everything that stands on the sand sits in a little shade -->
         <g id="contact-shadows" fill="url(#contact)">
           <ellipse cx="336" cy="834" rx="150" ry="22"/>
@@ -192,6 +209,8 @@
         <path d="M 262,550 C 276,540 292,536 302,524 C 306,534 296,546 282,552 Z" class="c-moss"/>
         <path d="M 364,528 C 372,538 386,544 398,548 C 386,552 370,548 362,538 Z" class="c-moss"/>
         <path d="M 296,778 C 306,770 322,772 330,776 C 318,780 304,782 296,778 Z" class="c-moss"/>
+        <!-- snow settles on the roof and the finial -->
+        <path class="snow-cap" d="M 250,551 C 274,546 294,530 305,512 L 355,512 C 366,530 386,546 410,551 C 382,549 360,541 351,526 L 309,526 C 300,541 278,549 250,551 Z M 321,484 C 322,470 338,470 339,484 C 334,478 326,478 321,484 Z M 290,548 h 80 l -2,6 h -76 Z"/>
         <!-- a snail lives here -->
         <g id="snail" class="clickable" transform="translate(352 742)">
           <path id="snail-body" d="M -16,10 C -10,4 6,4 16,8 L 22,2 L 24,4 L 20,10 C 14,14 -10,14 -16,10 Z" class="c-snail ink-thin"/>
@@ -207,6 +226,7 @@
         <rect x="1164" y="632" width="272" height="14" rx="3" class="c-wood-light ink"/>
         <path d="M 1140,604 Q 1300,584 1460,604 L 1452,616 Q 1300,598 1148,616 Z" class="c-wood-dark ink"/>
         <path d="M 1150,600 Q 1300,572 1450,600" class="wood-hi"/>
+        <path class="snow-cap" d="M 1140,603 Q 1300,570 1460,603 L 1457,609 Q 1300,588 1143,609 Z"/>
         <g class="ema-minis">
           <path d="M 1214,646 v 10 M 1246,646 v 14 M 1356,646 v 12 M 1388,646 v 9" class="ema-string"/>
           <use href="#ema-mini" x="1200" y="656" width="28" height="24"/>
@@ -222,6 +242,7 @@
         <path d="M 1012,908 C 1006,876 1030,850 1066,846 C 1104,842 1140,860 1146,890 C 1150,914 1124,928 1080,930 C 1040,932 1016,926 1012,908 Z" class="c-stone ink"/>
         <path d="M 1026,872 C 1040,852 1082,846 1110,856 C 1128,862 1138,874 1134,880 C 1110,868 1060,864 1026,872 Z" class="c-moss"/>
         <path d="M 1040,900 Q 1060,906 1080,902" class="stone-crease"/>
+        <path class="snow-cap" d="M 1020,876 C 1036,850 1084,842 1114,852 C 1134,859 1144,872 1140,884 C 1112,868 1058,862 1020,876 Z"/>
       </g>
 
       <!-- the meditation spot: stepping stone and zafu cushion -->
@@ -247,6 +268,25 @@
           <g id="flower-head" transform="translate(10 -54)">
             <path d="M 0,-13 L 4,-5 L 12,-6 L 7,1 L 11,9 L 2,6 L -4,12 L -5,4 L -12,1 L -5,-3 Z" class="c-bloom ink-thin"/>
             <circle r="3" class="c-gold"/>
+          </g>
+        </g>
+      </g>
+
+      <!-- a little fox made of snow (Kon builds it when enough has fallen; it melts in its own time) -->
+      <g id="snowfox" aria-hidden="true" style="display:none">
+        <g id="snowfox-g" transform="translate(716 950)">
+          <ellipse cx="2" cy="1" rx="30" ry="7" class="snow-shadow"/>
+          <path d="M 19,-14 q 15,-5 19,-22" class="snow-twig"/>
+          <circle cx="0" cy="-20" r="22" class="snowball ink"/>
+          <g id="snowfox-head">
+            <circle cx="0" cy="-53" r="16" class="snowball ink"/>
+            <g id="snowfox-face">
+              <path d="M -13,-63 L -15,-84 L -3,-68 Z M 13,-63 L 15,-84 L 3,-68 Z" class="c-red ink-thin"/>
+              <circle cx="-6" cy="-56" r="2.1" class="f-ink"/>
+              <circle cx="6" cy="-56" r="2.1" class="f-ink"/>
+              <path d="M -2.6,-51 h 5.2 l -2.6,3.2 Z" class="f-ink"/>
+              <path d="M -12,-40 Q 0,-33 12,-40 Q 8,-29 0,-27 Q -8,-29 -12,-40 Z" class="c-red ink-thin"/>
+            </g>
           </g>
         </g>
       </g>
@@ -289,6 +329,11 @@
             </g>
           </g>
 
+          <g id="kon-umbrella-stem" opacity="0">
+            <path class="umb-stem-ol" d="M 0,6 C -8,-60 -30,-140 -54,-196"/>
+            <path class="umb-stem" d="M 0,6 C -8,-60 -30,-140 -54,-196"/>
+          </g>
+
           <g id="kon-head" class="clickable">
             <g id="kon-ear-l" transform="translate(-46 -50) rotate(-20)">
               <path class="c-fur" d="M -28,10 C -32,-16 -22,-50 -5,-76 Q 1,-83 7,-75 C 22,-50 32,-16 28,10 Z"/>
@@ -314,6 +359,8 @@
               </g>
             </g>
             <use href="#head-shape" class="ink no-fill"/>
+            <!-- sit still in the snow for long enough, and it settles -->
+            <path id="kon-snowcap" class="snow-cap-kon" opacity="0" d="M -34,-66 C -30,-84 -8,-90 6,-88 C 22,-87 34,-80 36,-66 C 22,-72 12,-68 2,-71 C -10,-66 -22,-72 -34,-66 Z"/>
             <g id="kon-ahoge" transform="translate(2 -72)">
               <path class="c-fur ink-thin" d="M -7,6 C -9,-6 -3,-20 9,-27 C 5,-18 5,-10 7,-4 C 11,-12 17,-15 23,-15 C 17,-8 13,0 11,7 Z"/>
             </g>
@@ -419,6 +466,16 @@
             <text id="kon-sign-text" x="0" y="-33" class="sign-text" text-anchor="middle">7</text>
           </g>
 
+          <!-- a big butterbur leaf, held up when it rains (its stem is drawn behind the head: see below) -->
+          <g id="kon-umbrella" opacity="0">
+            <g id="kon-umbrella-leaf" transform="translate(-54 -198)">
+              <path class="umb-under" d="M -118,10 C -80,28 80,28 118,10 C 60,-6 -60,-6 -118,10 Z"/>
+              <path class="umb-leaf ink" d="M -122,12 C -118,-44 -62,-74 0,-74 C 62,-74 118,-44 122,12 C 100,2 84,14 62,6 C 40,16 22,14 0,8 C -22,14 -40,16 -62,6 C -84,14 -100,2 -122,12 Z"/>
+              <path class="umb-vein" d="M 0,-70 L 0,6 M 0,-66 C -30,-50 -52,-28 -62,4 M 0,-66 C 30,-50 52,-28 62,4 M 0,-68 C -60,-56 -100,-30 -116,8 M 0,-68 C 60,-56 100,-30 116,8"/>
+              <path class="umb-hi" d="M -86,-32 C -58,-56 -22,-66 4,-67"/>
+            </g>
+          </g>
+
           <g id="kon-arm-l" class="arm"><path class="arm-ol"/><path class="arm-fur"/><path class="arm-sock"/><ellipse class="paw" rx="10.5" ry="9"/></g>
           <g id="kon-arm-r" class="arm"><path class="arm-ol"/><path class="arm-fur"/><path class="arm-sock"/><ellipse class="paw" rx="10.5" ry="9"/></g>
           </g>
@@ -497,6 +554,8 @@
 
   <!-- the light of the hour, multiplied over the garden (js/garden/light.js) -->
   <canvas id="shade" aria-hidden="true"></canvas>
+  <!-- rain, snow, splashes: whatever is falling through the air (above the light map, so it catches the light) -->
+  <canvas id="weather" aria-hidden="true" style="display:none"></canvas>
   <!-- the night sky shines through: stars, the Milky Way and the moon, above the hills only -->
   <svg id="layer-stars" class="far-layer" viewBox="0 0 1600 1000" aria-hidden="true">
     <defs>
@@ -619,6 +678,10 @@
       <li>Light the lantern and watch the sun go down. (Put it out for morning.)</li>
       <li>Shake the maple. Tap the bamboo. Wait for the wind.</li>
       <li>At night, look up. Catch a falling star, then make a wish. Say hi to the moon.</li>
+      <li>Wait for the weather. When it rains, find the puddles (Kon will).</li>
+      <li>Squeeze a cloud. Tap a puddle. Flick the little ball.</li>
+      <li>Some of the pebbles aren’t pebbles. Hold very still and watch the sand.</li>
+      <li>If the sun shines through the rain, look at the far shore.</li>
       <li>Come back tomorrow. Kon notices.</li>
     </ul>
     <p class="hints-foot">Nothing you type is read or stored. Kon only sees that you are typing.</p>

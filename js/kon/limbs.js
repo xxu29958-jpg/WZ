@@ -43,6 +43,19 @@ export class Limbs {
       el.sign.setAttribute('transform', `${tr(px, py - 2)} rotate(${f2(Math.sin(this.t * 1.7) * 4 + 6)}) scale(${f2(Math.max(0.01, sg))})`);
     }
 
+    // ---- the leaf umbrella, in the right paw: it pops open, and leans with the wind ----
+    const um = clamp(s.umbrella.step(dt, P.umbrella ? 1 : 0), 0, 1.3);
+    if (um > 0.01 || this.umbShown) {
+      this.umbShown = um > 0.01;
+      const tiltU = s.umbTilt.step(dt, -(this.wind || 0) * 16 - lean * 0.5 + (P.umbrellaTilt || 0));
+      const place = `${tr(s.pawRx.x, s.pawRy.x)} rotate(${f2(tiltU + Math.sin(this.t * 1.1) * 1.6)}) scale(${f2(Math.max(0.01, um))})`;
+      // (the stem passes behind the head, the leaf sits over it)
+      for (const part of [el.umbrella, el.umbStem]) {
+        part.setAttribute('opacity', f2(clamp(um * 2.5)));
+        part.setAttribute('transform', place);
+      }
+    }
+
     // ---- tail ----
     this.drawTail(dt, P, lean);
   }

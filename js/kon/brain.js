@@ -31,6 +31,7 @@ import { Social } from './social.js';
 import { Stillness } from './stillness.js';
 import { Play } from './play.js';
 import { Visitors } from './visitors.js';
+import { Outdoors } from './outdoors.js';
 
 export function neutralPose() {
   return {
@@ -46,7 +47,7 @@ export function neutralPose() {
     armL: null, armR: null,
     tailAmp: 0.15, tailSpeed: 0.6, tailBase: 0, tailCurl: 0,
     breath: 1, snap: 0, blink: true, sleepy: false,
-    float: 0, sign: null,
+    float: 0, sign: null, umbrella: 0, snowHat: 0,
     posture: null,             // 'sit' | 'stand' (null: decided from movement)
     move: null,                // a wish for the mover: { to, seat, gait, face, tol, leap }
     fx: { notes: 0, zzz: 0, bubble: 0, hearts: 0 },
@@ -57,8 +58,10 @@ export function neutralPose() {
 // narrator keys that map to a different voice key, and voice lines that may interrupt
 const VOICE_ALIAS = { lifeRack: 'readPlaques', classic: 'startled', cover: 'startled', pout: 'startled', bleh: 'startled', admireAfter: 'typingStop' };
 // lines about a moment the visitor made happen (or a rare one): Kon's reflexes don't talk over them
-const PRECIOUS = new Set(['moonRabbit', 'starCaught', 'starWish', 'meteor', 'fireflyNose', 'leafHat', 'lapseNight', 'lapseDay', 'birdOnHead']);
-const URGENT_VOICE = new Set(['startled', 'gotcha', 'sneeze', 'booped', 'satoriEnd', 'pounceMiss', 'pounceBird', 'birdEscaped', 'typingWalk', 'typingStop']);
+const PRECIOUS = new Set(['moonRabbit', 'starCaught', 'starWish', 'meteor', 'fireflyNose', 'leafHat', 'lapseNight', 'lapseDay', 'birdOnHead',
+  'rainbow', 'foxWedding', 'cloudFox', 'cloudFish', 'cloudRabbit', 'cloudPokeKon', 'snowStart', 'sunshower', 'snowfoxDone', 'butterflyNose', 'tsubuPop', 'tsubuCaught']);
+const URGENT_VOICE = new Set(['startled', 'gotcha', 'sneeze', 'booped', 'satoriEnd', 'pounceMiss', 'pounceBird', 'birdEscaped', 'typingWalk', 'typingStop',
+  'umbrella', 'puddleJump', 'cloudPokeKon', 'frogRibbit', 'tsubuPop']);
 const REACTIVE = new Set(['IDLE', 'WATCH', 'PRETENDING', 'RESUMING', 'RELAXING', 'DROWSY']);
 const ACTIVITY_EVENTS = new Set(['down', 'tap', 'focus', 'input', 'boop', 'pat', 'rakeStart', 'submit']);
 
@@ -131,6 +134,8 @@ export class Brain {
     this.stalkT = 0;
     this.approaching = false;
     this.standUntil = 0;
+    // out in the weather: the leaf umbrella, how wet the fur is, what Kon has noticed
+    this.out = { umbrella: false, rainT: 0, dryT: 0, wet: 0, snowHat: 0, bowSeen: false, suspect: null, kind: null };
   }
 
   /** What the garden needs to know to paint the live ensō. */
@@ -269,10 +274,12 @@ export class Brain {
     for (const ev of s.events) this.onEvent(ev, s);
     this.inEvent = false;
     this.arbitrate(dt, s);
-    if (this.reactive()) this.detect(dt, s);
+    // (in the middle of a game of ball, a cursor coming close is part of the game)
+    if (this.reactive() && !(this.life.act && this.life.act.engaged)) this.detect(dt, s);
 
     const tick = this['tick' + this.state];
     tick.call(this, dt, s, P);
+    this.outdoorPose(dt, s, P);
     // stand while moving and for a moment after; otherwise sit down
     if (s.self) {
       if (s.self.moving) this.standUntil = this.now + 1.1;
@@ -526,7 +533,7 @@ export class Brain {
         if (asleep) { this.impulse({ type: 'earFlick', side: 'r', s: 0.6 }); break; }
         // (it pauses whatever Kon is doing on the spot, but not a walk somewhere)
         if (this.state === 'IDLE' && !this.greet && !(s.self && (s.self.moving || s.self.airborne)) &&
-            !(this.life.act && ['bird', 'leaf', 'home'].includes(this.life.act.id)) && this.rng() < 0.65) {
+            !(this.life.act && (['bird', 'leaf', 'home'].includes(this.life.act.id) || this.life.act.def?.tick)) && this.rng() < 0.65) {
           if (this.life.act) this.dropLife(4);
           this.idleAct = this.makeAct('breeze', { dur: 3.6 });
           this.say('breeze');
@@ -536,7 +543,7 @@ export class Brain {
         // a shooting star: Kon looks up, and if nothing else is going on, makes a wish
         if (asleep || this.state === 'ZAZEN' || this.state === 'SATORI') break;
         this.flash = { x: ev.x, y: ev.y, until: this.now + 1.2 };
-        if (this.state === 'IDLE' && !this.greet && !(s.self && s.self.moving) && !(this.life.act && ['bird', 'home'].includes(this.life.act.id))) {
+        if (this.state === 'IDLE' && !this.greet && !(s.self && s.self.moving) && !(this.life.act && (['bird', 'home'].includes(this.life.act.id) || this.life.act.def?.tick))) {
           if (this.life.act) this.dropLife(4);
           this.idleAct = this.makeAct('wishStar', { dur: 3.6 });
           this.say('meteor', true);
@@ -553,13 +560,16 @@ export class Brain {
         if (asleep) break;
         this.flash = { x: ev.x, y: ev.y, until: this.now + 2.4 };
         if (this.state === 'IDLE' && !this.greet && !(s.self && s.self.moving)) {
-          if (this.life.act && this.life.act.id !== 'bird') this.dropLife(4);
-          this.idleAct = this.makeAct('moonWave', { dur: 2.6 });
+          if (this.life.act && this.life.act.id !== 'bird' && !this.life.act.def?.tick) this.dropLife(4);
+          if (!this.life.act || this.life.act.id === 'bird') this.idleAct = this.makeAct('moonWave', { dur: 2.6 });
         }
         this.say('moonRabbit', true);
         break;
       case 'fireflyNose':
         if (this.state === 'IDLE' || this.state === 'OBSERVING' || this.state === 'RELAXING') this.go('BOOPED', { firefly: true });
+        break;
+      case 'butterflyNose':
+        if (this.state === 'IDLE' || this.state === 'RELAXING') this.go('BOOPED', { firefly: true, butterfly: true });
         break;
       case 'leafOnHead':
         if (this.state === 'ZAZEN') this.say('leafOnHeadZen', true);
@@ -596,6 +606,7 @@ export class Brain {
         if (!asleep) this.flash = { x: ev.x, y: ev.y, until: this.now + 1.1 };
         break;
       default:
+        this.onOutdoorEvent(ev, s);
         break;
     }
   }
@@ -657,4 +668,4 @@ export class Brain {
 }
 
 // The states live in focused modules; their methods join the Brain class here.
-mixin(Brain, Life, Social, Stillness, Play, Visitors);
+mixin(Brain, Life, Social, Stillness, Play, Visitors, Outdoors);

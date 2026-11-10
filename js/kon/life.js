@@ -7,6 +7,7 @@
 import { randRange } from '../math.js';
 import { ACTS, IDLE_ACTS, ACTIVITIES } from './acts.js';
 import { POIS, BOUNDS, randomSpot } from '../garden/world.js';
+import { OUTDOOR_ACTIVITIES } from './outdoors.js';
 
 const ZAZEN_AFTER = 7;      // seconds of total stillness (at home) before true meditation begins
 
@@ -21,7 +22,9 @@ export class Life {
   }
 
   tickIDLE(dt, s, P) {
-    if (this.ptrActive && this.ptrBurst > 0.08) { this.dropLife(); this.go('WATCH', { from: 'idle' }); return; }
+    // (a fox in the middle of a game doesn't stop to stare at the cursor)
+    const playing = this.life.act && this.life.act.engaged;
+    if (this.ptrActive && this.ptrBurst > 0.08 && !playing) { this.dropLife(); this.go('WATCH', { from: 'idle' }); return; }
     const fresh = s.typing.focused && this.now - s.typing.focusAt < 3;
     if (this.typeActive || (fresh && this.typeI > 0.24)) { this.dropLife(); this.go('WATCH', { from: 'idle' }); return; }
     const self = s.self || { seat: 'cushion' };
@@ -89,7 +92,10 @@ export class Life {
       if (this.idleFor > 16 && this.rng() < 0.35) name = 'yawn';
       if (name === 'flowerSniff' && !this.near(s, POIS.flower.stand, 150)) name = 'lookAround';
       const def = IDLE_ACTS.find(([n]) => n === name);
-      this.idleAct = this.makeAct(name, { dur: def[2] });
+      // rain and snow are worth an idle moment of their own
+      const wx = this.weatherIdle(s);
+      if (wx) { this.idleAct = this.makeAct(wx[0], { dur: wx[1] }); this.say(ACTS[wx[0]].caption); }
+      else this.idleAct = this.makeAct(name, { dur: def[2] });
     }
     if (this.idleAct) {
       this.runAct(this.idleAct, dt, P);
@@ -106,14 +112,17 @@ export class Life {
   pickActivity(s) {
     const self = s.self;
     let best = null, bestU = -1;
-    for (const d of ACTIVITIES) {
+    for (const d of [...ACTIVITIES, ...OUTDOOR_ACTIVITIES]) {
       if (d.id === 'home' && self.seat === 'cushion') continue;
       if (d.id === 'rock' && self.seat === 'rock') continue;
+      if (d.when && !d.when(s, this)) continue;
+      // nobody sunbathes in the rain
+      if (d.id === 'rock' && s.weather && (s.weather.rain > 0.2 || s.weather.snow > 0.2)) continue;
       const last = this.life.lastVisit[d.id] ?? -1e9;
       const novelty = 1 - Math.exp(-(this.now - last) / 50);
       let w = s.night && d.nightWeight ? d.nightWeight : d.weight;
       if (d.id === 'home' && this.idleFor > 12) w *= 3; // a quiet garden draws Kon back to the cushion
-      const at = d.id === 'home' ? { x: 800, y: 870 } : d.id === 'rock' ? { x: 1079, y: 940 } : d.id === 'wander' ? { x: 800, y: 900 } : POIS[d.id].stand;
+      const at = d.at ? (d.at(s) || { x: 800, y: 900 }) : d.id === 'home' ? { x: 800, y: 870 } : d.id === 'rock' ? { x: 1079, y: 940 } : d.id === 'wander' ? { x: 800, y: 900 } : POIS[d.id].stand;
       const dist = Math.hypot(at.x - self.x, at.y - self.y);
       const u = w * novelty * (0.55 + this.rng() * 0.9) / (1 + dist / 1100);
       if (u > bestU) { bestU = u; best = d; }
@@ -151,6 +160,7 @@ export class Life {
     if (!L.act) {
       this.restIdle(dt, s, P);
       if (!this.greet && this.noticeBird(s)) return;
+      if (this.noticeTsubu(s, dt)) return;
       const fresh = this.reachableLeaf(s);
       if (fresh && fresh.byVisitor && !this.greet) { L.leafSeen[fresh.id] = true; L.act = { id: 'leaf', phase: 'go', leafId: fresh.id, t: 0 }; this.idleAct = null; return; }
       if (this.now > L.restUntil && !this.idleAct && !this.greet) {
@@ -165,6 +175,8 @@ export class Life {
       return;
     }
     if (L.act.id === 'bird') { this.tickBird(dt, s, P); return; }
+    // the weather's games, the ball, the frog… each has its own way of going
+    if (L.act.def && L.act.def.tick) { this[L.act.def.tick](dt, s, P); return; }
     // a bird or a leaf beats any casual plan (but not going home to meditate or sleep)
     if (!L.act.why && L.act.id !== 'leaf' && this.noticeBird(s)) return;
     if (!L.act.zen && L.act.id !== 'leaf') {

@@ -12,6 +12,10 @@ import { CAPTIONS } from '../js/kon/captions.js';
 import { VOICE } from '../js/kon/voice.js';
 import { Birds, birdContext } from '../js/garden/birds.js';
 import { Sky, paletteAt, isNightHour } from '../js/garden/sky.js';
+import { Weather, PUDDLES, puddleFill } from '../js/garden/weather.js';
+import { Ball } from '../js/garden/toys.js';
+import { Spirits, spiritContext } from '../js/garden/spirits.js';
+import { Frog, Butterfly } from '../js/garden/critters.js';
 
 const HEAD = { x: 800, y: 612 };
 const BODY = {
@@ -39,6 +43,14 @@ class Sim {
     this.objects = [];
     this.layout = 'wide';
     this.track = [];
+    this.emitted = [];      // everything the brain asked the garden for
+    this.weather = null;    // what the brain senses of the weather (tests set it)
+    this.spiritLog = [];
+  }
+  /** Weather as the brain senses it: a kind, and whatever else the test wants to say about it. */
+  setWeather(kind, extra = {}) {
+    const rain = kind === 'rain' ? 1 : kind === 'sunshower' ? 0.6 : 0;
+    this.weather = { kind, rain, snow: kind === 'snow' ? 1 : 0, cover: 0.5, wet: 0, white: 0, falling: rain ? kind : kind === 'snow' ? 'snow' : null, bow: null, puddles: [], ...extra };
   }
   get self() { return this.mover.state(); }
   /** Add a sparrow (it only comes when called, via sim.bird.visit). */
@@ -54,6 +66,7 @@ class Sim {
     if (this.t - p.lastMove > 0.05) { p.vx *= 0.85; p.vy *= 0.85; }
     const self = this.mover.state();
     const bird = this.bird && this.bird.object();
+    const extra = [this.ball && this.ball.object(), this.frog && this.frog.object(), this.spirits && this.spirits.object(self)].filter(Boolean);
     const s = {
       now: this.t,
       pointer: { ...p, speed: Math.hypot(p.vx, p.vy) },
@@ -61,15 +74,26 @@ class Sim {
       events: this.events.splice(0),
       self,
       body: bodyAt(self.x, self.y, self.h),
-      objects: bird ? [...this.objects, bird] : this.objects,
+      objects: [...this.objects, ...(bird ? [bird] : []), ...extra],
       places: PLACES,
       night: false,
       layout: this.layout,
     };
+    if (this.weather) s.weather = this.weather;
     const P = this.brain.update(DT, s);
     this.mover.command(P.move);
     this.mover.update(DT);
     const k = this.mover.state();
+    for (const e of this.brain.emits) {
+      this.emitted.push({ t: this.t, ...e });
+      if (e.type === 'ballBat' && this.ball) { const d = Math.hypot(e.data.dx, e.data.dy) || 1; this.ball.kick((e.data.dx / d) * e.data.power, (e.data.dy / d) * e.data.power * 1.5, 120, 'kon'); }
+    }
+    if (this.ball) for (const ev of this.ball.update(DT, { pointer: s.pointer, kon: k })) this.events.push(ev);
+    if (this.spirits) {
+      const ctx = spiritContext({ brain: this.brain, kon: k, view: { x: 0, y: 0, w: 1600, h: 1000 }, pointer: s.pointer, now: this.t });
+      for (const ev of this.spirits.update(DT, ctx)) { this.spiritLog.push({ t: this.t, ...ev }); this.events.push(ev); }
+    }
+    if (this.frog) for (const ev of this.frog.update(DT, { pointer: s.pointer, kon: k, wet: this.weather ? this.weather.wet : 0, raining: !!this.weather && this.weather.rain > 0.2 })) this.events.push(ev);
     if (this.bird) {
       const ctx = birdContext({ brain: this.brain, kon: k, body: bodyAt(k.x, k.y, k.h), view: { x: 0, y: 0, w: 1600, h: 1000 }, pointer: s.pointer });
       for (const ev of this.bird.update(DT, ctx)) { this.events.push(ev); this.birdLog.push({ t: this.t, ...ev }); }
@@ -934,6 +958,336 @@ test('the moon rabbit and the lantern time-lapse each get a reaction', (sim) => 
   const lapseKey = sim.brain.caption.key;
   const looking = sim.brain.flash && sim.brain.flash.x === 1300;
   return { ok: waved && moonKey === 'moonRabbit' && lapseKey === 'lapseNight' && looking, info: `waved=${waved} captions: ${moonKey}, ${lapseKey}; watching the sky=${!!looking}` };
+});
+
+// ---------------------------------------------------------------- weather, and the garden's other residents
+test('weather: clouds gather, it rains, puddles fill, and it clears with a rainbow', () => {
+  const w = new Weather({ rng: makeRng(3), auto: false });
+  const log = [];
+  const run = (secs, ctx = { night: false, sunUp: true }) => { for (let i = 0; i < secs * 30; i++) for (const e of w.update(1 / 30, ctx)) log.push(e.type + (e.kind ? ':' + e.kind : '')); };
+  run(20);
+  const quiet = log.length === 0 && w.rain === 0 && w.cover < 0.2;
+  w.set('cloudy', 15, [['rain', 60], ['cloudy', 10]]);
+  run(40);
+  const raining = w.kind === 'rain' && w.rain > 0.9 && w.cover > 0.8;
+  run(40);
+  const fullest = PUDDLES.map((P) => puddleFill(P, w.wet));
+  run(30);
+  const bow = w.bow;
+  run(260);
+  const dry = PUDDLES.every((P) => puddleFill(P, w.wet) === 0);
+  const order = ['weather:cloudy', 'weather:rain', 'rainStart:rain', 'weather:cloudy', 'rainStop:rain', 'rainbow', 'weather:clear'];
+  let at = -1;
+  const inOrder = order.every((k) => (at = log.indexOf(k, at + 1)) >= 0);
+  const ok = quiet && raining && fullest[0] > 0.9 && fullest.every((f) => f > 0.3) && bow > 0.8 && w.kind === 'clear' && w.bow < 0.05 && dry && inOrder;
+  return { ok, info: `quiet before=${quiet}; raining=${raining}; puddles ${fullest.map((f) => f.toFixed(2)).join(' ')}; rainbow ${bow.toFixed(2)} → ${w.bow.toFixed(2)}; dry again=${dry}; ${log.join(' → ')}` };
+});
+
+test('weather on its own: something happens within a few minutes; snow only falls at night; no rainbow after dark', () => {
+  let changed = 0, daySnow = 0, nightSnow = 0, nightBow = 0;
+  for (let seed = 1; seed <= 24; seed++) {
+    const night = seed % 2 === 0;
+    const w = new Weather({ rng: makeRng(seed) });
+    let first = -1;
+    for (let i = 0; i < 400 * 10; i++) {
+      for (const e of w.update(0.1, { night, sunUp: !night })) {
+        if (e.type === 'weather' && first < 0) first = w.t;
+        if (e.type === 'rainStart' && e.kind === 'snow') night ? nightSnow++ : daySnow++;
+        if (e.type === 'rainbow' && night) nightBow++;
+      }
+      if (![w.cover, w.rain, w.snow, w.wet, w.white, w.bow].every((v) => v >= 0 && v <= 1)) return { ok: false, info: `out of range at seed ${seed}` };
+    }
+    if (first > 0 && first < 200) changed++;
+  }
+  return { ok: changed === 24 && daySnow === 0 && nightSnow > 0 && nightBow === 0, info: `${changed}/24 skies changed within 200 s; snow by day ${daySnow}, by night ${nightSnow}; rainbows after dark ${nightBow}` };
+});
+
+test('rain: Kon notices, then holds up a leaf; when it stops the leaf goes away and Kon shakes itself dry', (sim) => {
+  resting(sim);
+  sim.setWeather('rain');
+  sim.events.push({ type: 'rainStart', kind: 'rain' });
+  let noticed = false, upAt = -1;
+  const t0 = sim.t;
+  sim.run(8, null, (P) => {
+    if (sim.brain.idleAct && sim.brain.idleAct.name === 'rainNotice') noticed = true;
+    if (P.umbrella && upAt < 0) upAt = sim.t - t0;
+  });
+  const key = sim.brain.caption.key;
+  sim.setWeather('clear');
+  sim.events.push({ type: 'rainStop', kind: 'rain' });
+  let down = false, shook = false;
+  sim.run(9, null, (P) => {
+    if (!P.umbrella) down = true;
+    if (sim.brain.idleAct && sim.brain.idleAct.name === 'shakeDry') shook = true;
+  });
+  const drops = sim.emitted.some((e) => e.type === 'shakeDrops');
+  return { ok: noticed && upAt > 2 && upAt < 6 && down && shook && drops, info: `noticed=${noticed}; umbrella up after ${upAt.toFixed(1)} s (${key}); put away=${down}; shook dry=${shook} (drops flew: ${drops})` };
+});
+
+test('rain does not interrupt true meditation (no umbrella), and it wakes a sleeping fox', (sim) => {
+  sim.still(1);
+  stillUntil(sim, () => sim.brain.isStill() && sim.brain.state === 'ZAZEN', 40);
+  sim.setWeather('rain');
+  sim.events.push({ type: 'rainStart', kind: 'rain' });
+  let umbrella = false;
+  sim.run(6, null, (P) => { if (P.umbrella) umbrella = true; });
+  const stillZen = sim.brain.state === 'ZAZEN';
+  const sim2 = new Sim(7);
+  sim2.brain.zenArmed = false;
+  sim2.still(1);
+  sim2.brain.go('SLEEPING');
+  sim2.still(1);
+  sim2.setWeather('rain');
+  sim2.events.push({ type: 'rainStart', kind: 'rain' });
+  sim2.still(0.2);
+  const woke = sim2.states.includes('WAKING');
+  return { ok: stillZen && !umbrella && woke, info: `still meditating=${stillZen}, umbrella=${umbrella}; the sleeper woke=${woke}` };
+});
+
+test('a puddle: Kon runs over, leaps in (a splash), stomps, and is delighted', (sim) => {
+  resting(sim);
+  sim.brain.zenArmed = false;
+  sim.setWeather('rain', { wet: 1, puddles: [{ id: 'a', x: 880, y: 950, rx: 62, fill: 1 }] });
+  sim.still(5);   // (long enough for the leaf to come out)
+  sim.brain.startLife('puddle');
+  stillUntil(sim, () => sim.brain.state === 'POUNCE' && sim.brain.arg.phase === 'land', 20);
+  const k = sim.self;
+  const inPuddle = Math.hypot(k.x - 880, k.y - 950) < 30;
+  sim.still(3.2);
+  const splashes = sim.emitted.filter((e) => e.type === 'splash').length;
+  return { ok: inPuddle && splashes >= 3 && sim.brain.caption.key === 'puddleAfter' && sim.states.includes('RELAXING'), info: `landed in the puddle=${inPuddle} (${k.x.toFixed(0)}, ${k.y.toFixed(0)}); splashes=${splashes}; "${sim.brain.caption.text}"` };
+});
+
+test('the ball: it rolls, bounces off the scenery, stays in the garden and comes to rest', () => {
+  const b = new Ball({ rng: makeRng(4) });
+  let bad = '';
+  let kicks = 0;
+  const rng = makeRng(9);
+  for (let n = 0; n < 40; n++) {
+    const a = rng() * TAU;
+    b.kick(Math.cos(a) * 520, Math.sin(a) * 520, rng() * 300, 'user');
+    kicks++;
+    for (let i = 0; i < 60 * 7; i++) {
+      b.update(DT, {});
+      if (!(b.x >= 215 && b.x <= 1139 && b.y >= 755 && b.y <= 961 && b.h >= 0)) bad = `left the garden at (${b.x.toFixed(0)}, ${b.y.toFixed(0)}, h=${b.h.toFixed(0)})`;
+    }
+    if (b.speed > 0.01 || b.h > 0.01) bad = `still moving 7 s after kick ${n}`;
+    for (const o of OBSTACLES) if (Math.hypot((b.x - o.x) / o.rx, (b.y - o.y) / o.ry) < 0.98) bad = `came to rest inside the ${o.id}`;
+    if (bad) break;
+  }
+  return { ok: !bad, info: bad || `${kicks} kicks in every direction: always back to rest, on open sand` };
+});
+
+test('you kick the ball: Kon chases it (cursor or no cursor) and bats it back toward you', (sim) => {
+  sim.ball = new Ball({ rng: makeRng(4) });
+  sim.weather = null;
+  sim.sweep(1.5);
+  // the cursor brushes through the ball
+  const c = sim.ball.center();
+  sim.run(0.25, (t) => sim.moveTo(c.x + 60 - t * 480, c.y));
+  const kicked = sim.ball.kickedBy === 'user';
+  let chased = false, bat = null, watching = false;
+  sim.run(9, () => sim.moveTo(520 + Math.sin(sim.t * 2) * 30, 900), () => {
+    const a = sim.brain.life.act;
+    if (a && a.id === 'ball' && sim.brain.state === 'IDLE') chased = true;
+    if (sim.brain.state === 'WATCH' && a) watching = true;
+    const e = sim.brain.emits.find((x) => x.type === 'ballBat');
+    if (e && !bat) bat = { ...e.data, bx: sim.ball.x };
+  });
+  const towardYou = bat && Math.sign(bat.dx) === Math.sign(520 - bat.bx);
+  return { ok: kicked && chased && !!bat && towardYou && !watching, info: `kicked by the cursor=${kicked}; Kon gave chase=${chased}; batted=${!!bat}${bat ? ` (dx ${bat.dx.toFixed(0)}, toward the cursor: ${towardYou})` : ''}` };
+});
+
+const spiritSim = (sim) => {
+  sim.spirits = new Spirits({ rng: makeRng(5), auto: false });
+  sim.brain.zenArmed = false;
+  sim.brain.life.lastVisit.tsubu = 1e9;   // (Kon minds its own business)
+  sim.still(0.5);
+  return sim.spirits;
+};
+const moved = (a, b) => a.reduce((m, s, i) => Math.max(m, Math.hypot(s.x - b[i].x, s.y - b[i].y, s.h - b[i].h)), 0);
+const snap = (sp) => sp.list.map((s) => ({ x: s.x, y: s.y, h: s.h }));
+
+test('pebble spirits: they move only while nobody is watching; one cursor move and they are stones', (sim) => {
+  const sp = spiritSim(sim);
+  sp.outing('parade', sp.ctx, { x: 868, y: 922 });
+  sim.still(5);
+  const a = snap(sp);
+  sim.still(3);
+  const whileAlone = moved(snap(sp), a);
+  // the visitor stirs
+  sim.run(0.5, (t) => sim.moveTo(300 + t * 80, 500));
+  const b = snap(sp);
+  const stones = sp.out.every((s) => s.stone > 0.9);
+  sim.run(4, (t) => sim.moveTo(340 + Math.sin(t * 3) * 60, 500));
+  const whileWatched = moved(snap(sp), b);
+  // …and holds still again
+  sim.still(4);
+  const again = moved(snap(sp), b);
+  const awake = sp.out.some((s) => s.stone < 0.2);
+  return { ok: sp.out.length === 5 && whileAlone > 30 && stones && whileWatched < 0.01 && again > 20 && awake, info: `alone they moved ${whileAlone.toFixed(0)}; watched: stones=${stones}, moved ${whileWatched.toFixed(2)}; left alone again: ${again.toFixed(0)}` };
+});
+
+test('pebble spirits: never out while the cursor is busy; they go home on their own; a tap sends one under', (sim) => {
+  const sp = new Spirits({ rng: makeRng(5) });
+  sim.spirits = sp;
+  sim.brain.zenArmed = false;
+  sim.brain.life.lastVisit.tsubu = 1e9;
+  sim.sweep(40);
+  const hidWhileWatched = sp.troupe.mode === 'under' && !sim.spiritLog.length;
+  sim.ptr.present = false;
+  stillUntil(sim, () => sp.troupe.mode !== 'under', 30);
+  const cameOut = sp.out.length === 5;
+  sim.still(8);
+  const s0 = sp.out[0];
+  const tapped = sp.tap(s0.x, s0.y - 10);
+  const four = sp.out.length === 4;
+  stillUntil(sim, () => sp.troupe.mode === 'under', 150);
+  const home = sp.troupe.mode === 'under' && sp.out.length === 0;
+  const inScenery = sim.spiritLog.filter((e) => e.type === 'tsubuStep' && !isFree(e)).length;
+  return { ok: hidWhileWatched && cameOut && tapped && four && home && inScenery === 0, info: `hidden while you moved=${hidWhileWatched}; came out when you left=${cameOut}; tap → under=${tapped && four}; all home by ${sim.t.toFixed(0)} s=${home}; hops into scenery=${inScenery}` };
+});
+
+test('pebble spirits: a tower of five; when Kon meditates they come and sit with it, and scatter when it stirs', (sim) => {
+  const sp = spiritSim(sim);
+  sp.outing('tower', sp.ctx, { x: 868, y: 922 });
+  stillUntil(sim, () => sp.troupe.phase === 'hold', 40);
+  const hs = sp.list.map((s) => Math.round(s.h)).sort((a, b) => a - b);
+  const tower = sp.troupe.phase === 'hold' && hs[0] === 0 && hs[4] > 50 && sp.list.every((s) => Math.abs(s.x - sp.troupe.G.x) < 1);
+  // now a fox in deep meditation
+  const sim2 = new Sim(7);
+  sim2.still(1);
+  stillUntil(sim2, () => sim2.brain.isStill(), 40);
+  const sp2 = new Spirits({ rng: makeRng(5), auto: false });
+  sim2.spirits = sp2;
+  sim2.still(0.2);
+  sp2.outing(null, sp2.ctx, { x: 868, y: 922 });
+  stillUntil(sim2, () => sp2.troupe.mode === 'zen' && sp2.out.every((s) => s.sit), 30);
+  const sitting = sp2.troupe.mode === 'zen' && sp2.out.length === 5 && sp2.out.every((s) => s.sit);
+  const zenHeld = sim2.brain.state === 'ZAZEN' || sim2.brain.state === 'SATORI';
+  sim2.sweep(1.2);
+  sim2.ptr.present = false;
+  sim2.still(3);
+  const scattered = ['scatter', 'under', 'home'].includes(sp2.troupe.mode);
+  return { ok: tower && sitting && zenHeld && scattered, info: `tower heights ${hs.join(',')} (${tower}); sat down around a meditating Kon=${sitting} (without disturbing it: ${zenHeld}); scattered when it stirred=${scattered} (${sp2.troupe.mode})` };
+});
+
+test('Kon goes to look at a pebble that moved: it holds perfectly still, gets poked, and stays a pebble', (sim) => {
+  const sp = spiritSim(sim);
+  sim.weather = null;
+  sp.outing('parade', sp.ctx, { x: 868, y: 922 });
+  sim.still(6);
+  sim.brain.startLife('tsubu');
+  let poked = false, movedWhileInspected = 0, inspected = false;
+  let prev = null;
+  sim.run(22, null, () => {
+    const a = sim.brain.life.act;
+    if (a && a.id === 'tsubu' && a.phase === 'do') {
+      inspected = true;
+      const now = snap(sp);
+      if (prev) movedWhileInspected = Math.max(movedWhileInspected, moved(now, prev));
+      prev = now;
+    }
+    if (sim.brain.emits.some((e) => e.type === 'tsubuPoke')) poked = true;
+  });
+  return { ok: inspected && poked && movedWhileInspected < 0.01 && sp.out.length === 5, info: `Kon inspected=${inspected}, poked one=${poked}; they moved ${movedWhileInspected.toFixed(2)} under its nose; all five still there=${sp.out.length === 5}` };
+});
+
+test('the frog: comes out in the rain, croaks, leaps from a cursor, dives when pressed, leaves when it dries', () => {
+  const f = new Frog({ rng: makeRng(6) });
+  const log = [];
+  const ptr = { present: false, x: 0, y: 0, speed: 0 };
+  const run = (secs, wet, raining) => { for (let i = 0; i < secs * 60; i++) for (const e of f.update(DT, { pointer: ptr, wet, raining })) log.push(e.type); };
+  run(5, 0, false);
+  const stayedIn = f.state === 'away';
+  run(8, 0.6, true);
+  const out = f.state === 'sit';
+  run(12, 0.6, true);
+  const croaks = log.filter((e) => e === 'frogCroak').length;
+  // a cursor right on top of it
+  Object.assign(ptr, { present: true, x: f.x, y: f.y - 8, speed: 0 });
+  run(0.2, 0.6, true);
+  const leapt = f.state === 'hop';
+  ptr.present = false;
+  run(1.5, 0.6, true);
+  // …and again, wherever it landed: that's enough, into the water
+  Object.assign(ptr, { present: true, x: f.x, y: f.y - 8, speed: 0 });
+  run(0.2, 0.6, true);
+  ptr.present = false;
+  run(3, 0.6, true);
+  const dived = log.includes('frogDive');
+  run(8, 0.6, true);
+  run(40, 0.05, false);
+  return { ok: stayedIn && out && croaks >= 2 && leapt && dived && f.state === 'away', info: `dry: away=${stayedIn}; rain: out=${out}, croaks=${croaks}; cursor on it: leapt=${leapt}, into the basin=${dived}; dry again: ${f.state}` };
+});
+
+test('Kon and the frog: every croak gets an answer', (sim) => {
+  resting(sim);
+  sim.brain.zenArmed = false;
+  sim.setWeather('rain', { wet: 0.7 });
+  sim.frog = new Frog({ rng: makeRng(6), auto: false });
+  sim.still(4);
+  sim.frog.appear();
+  stillUntil(sim, () => sim.frog.state === 'sit', 10);
+  sim.brain.startLife('frog');
+  let croaks = 0, answers = 0, lastKey = '';
+  sim.run(22, null, () => {
+    if (sim.brain.caption.key === 'frogRibbit' && lastKey !== 'frogRibbit') answers++;
+    lastKey = sim.brain.caption.key;
+  });
+  croaks = sim.emitted.filter((e) => e.type === 'sfx' && e.data === 'croak').length;
+  return { ok: answers >= 1 && croaks >= 1, info: `Kon answered ${croaks} croak(s) in its best frog` };
+});
+
+test('the butterfly: lands on a cursor that holds still, rides along gently, and leaves when it jerks', () => {
+  const b = new Butterfly({ rng: makeRng(8), auto: false });
+  const view = { x: 0, y: 0, w: 1600, h: 1000 };
+  const ptr = { present: true, isTouch: false, x: 1100, y: 620, lastMove: 0, speed: 0 };
+  let now = 10;
+  const log = [];
+  const run = (secs, fn) => { for (let i = 0; i < secs * 60; i++) { now += DT; if (fn) fn(); for (const e of b.update(DT, { now, view, pointer: ptr, day: true, clear: true })) log.push(e.type); } };
+  run(0.1);
+  b.visit();
+  run(25);
+  const landed = b.state === 'cursor' && Math.hypot(b.x - ptr.x, b.y - (ptr.y - 6)) < 4;
+  run(3, () => { ptr.x += 0.6; ptr.lastMove = now; ptr.speed = 36; });
+  const rode = b.state === 'cursor' && Math.hypot(b.x - ptr.x, b.y - (ptr.y - 6)) < 14;
+  run(0.3, () => { ptr.x -= 16; ptr.lastMove = now; ptr.speed = 960; });
+  const fled = b.state === 'fly';
+  return { ok: landed && rode && fled && log.includes('butterflyCursor'), info: `landed on the still cursor=${landed}; rode along=${rode}; fled the jerk=${fled}` };
+});
+
+test('every new moment has words: captions for each key the outdoors can say', () => {
+  const keys = ['rainStart', 'sunshower', 'snowStart', 'rainZen', 'umbrella', 'rainStop', 'snowStop', 'rainOver', 'shakeDry', 'rainbow', 'puddleSee', 'puddleJump', 'puddleAfter',
+    'rainListen', 'catchDrops', 'catchFlake', 'snowAwe', 'cloudPoke', 'cloudPokeKon', 'cloudFox', 'cloudFish', 'cloudRabbit', 'foxWedding', 'snowfoxBuild', 'snowfoxDone',
+    'ballChase', 'ballBat', 'ballDone', 'frogMeet', 'frogRibbit', 'frogGone', 'tsubuSee', 'tsubuInspect', 'tsubuGone', 'tsubuPop', 'tsubuCaught', 'tsubuZen', 'tailChase', 'tailDizzy',
+    'butterflyCursor', 'butterflyNose', 'dream'];
+  const missing = keys.filter((k) => !CAPTIONS[k] || !CAPTIONS[k].length || !VOICE[k]);
+  return { ok: missing.length === 0, info: missing.length ? `missing: ${missing.join(', ')}` : `${keys.length} moments, each with a narrator's line and a line of Kon's own` };
+});
+
+test('a long wet, snowy, busy session: every pose stays finite, and Kon ends up dry and at rest', (sim) => {
+  sim.ball = new Ball({ rng: makeRng(4) });
+  sim.spirits = new Spirits({ rng: makeRng(5) });
+  sim.frog = new Frog({ rng: makeRng(6) });
+  const w = new Weather({ rng: makeRng(2), auto: false });
+  const seen = new Set();
+  const kinds = [['rain', 40], ['clear', 20], ['snow', 50], ['sunshower', 30], ['clear', 30]];
+  for (const [kind, secs] of kinds) {
+    w.set(kind, 1e6);
+    sim.run(secs, (t) => {
+      for (const e of w.update(DT, { night: kind === 'snow', sunUp: kind !== 'snow' })) sim.events.push(e);
+      sim.weather = { kind: w.kind, rain: w.rain, snow: w.snow, cover: w.cover, wet: w.wet, white: w.white, falling: w.falling, bow: w.bow > 0.3 ? { x: 600, y: 300 } : null,
+        puddles: PUDDLES.map((P) => ({ id: P.id, x: P.x, y: P.y, rx: P.rx, fill: puddleFill(P, w.wet) })).filter((p) => p.fill > 0.45) };
+      if (Math.floor(t) % 13 === 5) sim.moveTo(400 + Math.sin(t * 3) * 200, 500 + Math.cos(t * 2) * 100);
+    }, () => {
+      const a = sim.brain.life.act;
+      if (a) seen.add(a.id);
+      if (sim.brain.idleAct) seen.add(sim.brain.idleAct.name);
+    });
+  }
+  const o = sim.brain.out;
+  return { ok: !o.umbrella && seen.has('puddle') && seen.size > 6, info: `umbrella away=${!o.umbrella}; Kon got up to: ${[...seen].join(', ')}` };
 });
 
 export function runAll() {

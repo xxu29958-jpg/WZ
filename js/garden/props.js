@@ -71,9 +71,12 @@ export class GardenProps {
     const stop = (e) => e.stopPropagation();
     // raking: press on open sand and drag
     this.app.addEventListener('pointerdown', (e) => {
-      // after dark, the sky has things to catch and poke
-      if (this.skyTap(e.clientX, e.clientY)) return;
-      if (this.rake.tryBegin(e, this.toWorld(e.clientX, e.clientY))) {
+      // the sky has things to poke (clouds) and, after dark, to catch
+      if (!(e.target.closest && e.target.closest('.corner, .brand, .ema, .hints')) && this.skyTap(e.clientX, e.clientY)) return;
+      // the small things on the sand come first: a tap on the ball, a pebble or the frog is not a rake stroke
+      const at = this.toWorld(e.clientX, e.clientY);
+      if (!(e.target.closest && e.target.closest('.corner, .brand, .ema, .hints')) && this.tapSmall(at)) return;
+      if (this.rake.tryBegin(e, at)) {
         try { this.app.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
       }
     });
@@ -82,6 +85,7 @@ export class GardenProps {
       // a mouse looks around: the layers shift against each other (a touch doesn't: fingers jump)
       if (e.pointerType === 'mouse' && this.W) {
         const r = this.app.getBoundingClientRect();
+        this.pointerScreen = { x: e.clientX - r.left, y: e.clientY - r.top };
         this.lookT.x = clamp(((e.clientX - r.left) / this.W) * 2 - 1, -1, 1);
         this.lookT.y = clamp(((e.clientY - r.top) / this.H) * 2 - 1, -1, 1);
       }
@@ -116,6 +120,16 @@ export class GardenProps {
     keyClick('lantern', () => this.toggleNight());
     keyClick('shishi', () => this.tipShishi(true));
     keyClick('maple', () => this.shakeMaple(null));
+  }
+
+  /** A tap on one of the small things that live on the sand. Returns true if it was used. */
+  tapSmall(at) {
+    if (this.spirits && this.spirits.tap(at.x, at.y)) { this.emit({ type: 'sfx', name: 'squeak' }); return true; }
+    if (this.frog && this.frog.tap(at.x, at.y)) return true;
+    if (this.ball && this.ball.tap(at.x, at.y)) { this.emit({ type: 'sfx', name: 'bounce', k: 0.7 }); return true; }
+    // a tap in a puddle: a splash, of course
+    if (this.puddleAt(at.x, at.y)) { this.splash(at.x, at.y, 0.55); this.emit({ type: 'notice', x: at.x, y: at.y }); return true; }
+    return false;
   }
 
   /**

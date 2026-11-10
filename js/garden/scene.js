@@ -15,12 +15,14 @@ import { Light } from './light.js';
 import { GardenWind } from './wind.js';
 import { GardenNight } from './night.js';
 import { GardenVista } from './vista.js';
+import { Weather, GardenWeather, CLOUD_DEPTH } from './weather.js';
+import { GardenDreams } from './dreams.js';
 
 export { PLACES };
 
 // How deep each layer is (0: as far as the sky, 1: the ground Kon stands on, more: nearer than that).
 // The camera's pan, the pointer's parallax, the tilt and the breathing drift all scale with it.
-const DEPTH = { hills: 0.22, stars: 0.22, kasumi: 0.32, valley: 0.4 };
+const DEPTH = { hills: 0.22, stars: 0.22, clouds: CLOUD_DEPTH, kasumi: 0.32, valley: 0.4 };
 const LOOK = { x: 26, y: 14 };     // how far (px) the pointer's parallax shifts the sky
 const OVERSCAN = 120;              // extra sky above and below the screen, for the tilt
 
@@ -89,8 +91,11 @@ export class Scene {
     this.konBody = null;
     this.konSitting = false;
     this.konStill = false;
+    // the weather has a mind of its own (main.js turns the automatic changes off for tests)
+    this.weather = new Weather({ rng });
     this.buildSky();
     this.buildValley();
+    this.buildWeather();
     this.buildTerrace();
     this.buildNear();
     this.buildKasumi();
@@ -101,6 +106,7 @@ export class Scene {
     this.buildMaple();
     this.buildSusuki();
     this.buildFireflies();
+    this.buildDream();
     this.zen = new ZenFX({ scene: this, brush: this.brush, reducedMotion, rng });
     this.rake = new SandRake({ canvas: $('sand-canvas'), scene: this, emit: (ev) => this.emit(ev) });
     this.cursorGlow = { x: 0, y: 0, trail: [], on: false, built: false };
@@ -112,6 +118,7 @@ export class Scene {
     this.auraEl = $('aura');
     this.konEl = $('kon');
     this.visitor = null;
+    this.others = [];          // everything else that stands on the ground and moves (ball, frog, spirits…)
     this.konAt = { x: 800, y: 826, seat: 'cushion' };
     // camera: pans to follow Kon; far layers drift less (parallax). The pointer adds a
     // little more parallax (look), the camera can tilt up toward the sky and push in on a moment.
@@ -127,7 +134,7 @@ export class Scene {
     this.camFocus = null;
     this.stage = $('stage');
     this.worldLayers = $('world-layers');
-    this.farLayers = { hills: $('layer-hills'), valley: $('layer-valley'), kasumi: $('layer-kasumi'), stars: $('layer-stars') };
+    this.farLayers = { hills: $('layer-hills'), clouds: $('layer-clouds'), valley: $('layer-valley'), kasumi: $('layer-kasumi'), stars: $('layer-stars') };
     this.layers = [this.back, this.svg, this.glow, ...Object.values(this.farLayers)];
     this.appliedCamX = null;
     this.captionW = 300;
@@ -178,6 +185,7 @@ export class Scene {
     this.H = H;
     this.rake.layout();
     this.applyView();
+    this.layoutWeather();
     this.light.layout(W, H);
   }
 
@@ -207,7 +215,7 @@ export class Scene {
       }
       // the sky reaches above and below the screen, so the camera can tilt and look around
       const O = OVERSCAN, OW = O / S;
-      for (const el of [this.farLayers.hills, this.farLayers.stars]) {
+      for (const el of [this.farLayers.hills, this.farLayers.clouds, this.farLayers.stars]) {
         el.setAttribute('viewBox', `${(b.x - M).toFixed(4)} ${f2(b.y - OW)} ${(b.w + 2 * M).toFixed(4)} ${f2(b.h + 2 * OW)}`);
         el.style.top = `${-O}px`;
         el.style.height = `${this.H + 2 * O}px`;
@@ -291,7 +299,8 @@ export class Scene {
     this.look.x += ((calm ? 0 : this.lookT.x) + bx - this.look.x) * k;
     this.look.y += ((calm ? 0 : this.lookT.y) + by - this.look.y) * k;
     // tilt: look up at the sky while the lantern turns day to night (and in the arrival)
-    const tiltT = calm ? 0 : (this.sky.lapsing ? 70 : 0) * (this.mode === 'wide' ? 1 : 0.35);
+    // (and, a little, while there's a rainbow to see)
+    const tiltT = calm ? 0 : (this.sky.lapsing ? 70 : this.weather.bow > 0.4 ? 34 : 0) * (this.mode === 'wide' ? 1 : 0.35);
     const wt = 2 * Math.PI * (this.tilt > tiltT + 40 ? 0.22 : 0.35);
     this.tiltV += (wt * wt * (tiltT - this.tilt) - 2 * wt * this.tiltV) * dt;
     this.tilt += this.tiltV * dt;
@@ -434,6 +443,7 @@ export class Scene {
     const items = [{ key: konKey, els: [this.auraEl, this.konEl] }];
     const v = this.visitor;
     if (v && v.el && v.el.style.display !== 'none') items.push({ key: v.depthKey(konKey), els: [v.el] });
+    for (const o of this.others) if (o.el && o.el.style.display !== 'none') items.push({ key: o.depthKey(konKey), els: [o.el] });
     items.sort((a, b) => a.key - b.key);
     const slots = items.map((it) => this.sortables.find((o) => o.y > it.key) || null);
     const sig = items.map((it, i) => `${it.els[it.els.length - 1].id}<${slots[i] ? slots[i].id : 'end'}`).join(' ');
@@ -578,13 +588,16 @@ export class Scene {
       this.placeCaption();
     }
     this.updateWind(dt);
+    this.updateWeather(dt);
     this.updateNight(dt);
     this.updateValley(dt);
     this.updateProps(dt);
-    this.light.update(dt, this.sky.p, {
-      kon: this.konAt, fireflies: this.fireflies, sway: this.mapleSwayDeg, lampFlicker: this.lampFlicker, wind: this.wind,
+    this.updateDream(dt);
+    this.light.update(dt, this.weatherLight(this.sky.p), {
+      kon: this.konAt, fireflies: this.weather.white > 0.02 || this.weather.rain > 0.3 ? null : this.fireflies, sway: this.mapleSwayDeg, lampFlicker: this.lampFlicker, wind: this.wind,
+      lights: this.spirits ? this.spirits.lights() : null,
     });
   }
 }
 
-mixin(Scene, GardenArt, GardenProps, GardenWind, GardenNight, GardenVista);
+mixin(Scene, GardenArt, GardenProps, GardenWind, GardenNight, GardenVista, GardenWeather, GardenDreams);

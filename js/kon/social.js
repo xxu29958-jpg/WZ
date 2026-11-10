@@ -536,7 +536,7 @@ export class Social {
       P.blink = false;
       if (t > 0.8) {
         a.phase = 'air';
-        this.say('pounce', true);
+        this.say(a.target === 'puddle' ? 'puddleJump' : 'pounce', true);
         this.emit('sfx', 'boop');
       }
       return;
@@ -557,11 +557,13 @@ export class Social {
         a.phase = 'land';
         a.landT = t;
         if (a.target === 'leaf') this.emit('scatterLeaf', a.id);
+        if (a.target === 'puddle') this.emit('splash', { x: a.x, y: a.y, k: 1.25 });
       }
       return;
     }
     const lt = t - a.landT;
     if (a.target === 'bird') { this.pounceBirdAfter(lt, s, P); return; }
+    if (a.target === 'puddle') { this.puddleAfter(lt, s, P); return; }
     if (a.target === 'leaf') {
       // the leaf leaps away: Kon is delighted anyway
       const leaf = (s.objects || []).find((o) => o.kind === 'leaf');

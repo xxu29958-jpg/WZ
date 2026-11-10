@@ -70,7 +70,7 @@ export const PLACES = {
 };
 
 /** Draw order of the scenery (the row where each thing meets the ground). */
-export const SORT_Y = { lantern: 810, rack: 838, cushion: 826, flower: 828, rock: 888, shishi: 905 };
+export const SORT_Y = { lantern: 810, rack: 838, cushion: 826, flower: 828, rock: 888, shishi: 905, snowfox: 950 };
 
 const expanded = (o) => ({ x: o.x, y: o.y, rx: o.rx + KON_R.x, ry: o.ry + KON_R.y });
 

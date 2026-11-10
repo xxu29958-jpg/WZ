@@ -22,6 +22,9 @@ import { DOODLE_KINDS } from './garden/rake.js';
 import { Mover } from './kon/mover.js';
 import { depthScale } from './garden/world.js';
 import { Birds, birdContext } from './garden/birds.js';
+import { Ball } from './garden/toys.js';
+import { Spirits, spiritContext } from './garden/spirits.js';
+import { Frog, Butterfly } from './garden/critters.js';
 
 const $ = (id) => document.getElementById(id);
 const app = $('app');
@@ -85,16 +88,30 @@ const brain = new Brain({ reducedMotion: reduced(), rng: rngFor(2) });
 // a sparrow drops by now and then (scripted checks call it in with ?birds or __zen.birds.visit())
 const birds = new Birds({ parent: $('depth'), rng: rngFor(5), reduced: reduced(), auto: !manual || params.has('birds') });
 scene.visitor = birds;
+// the garden's other small residents: a temari ball, the pebble spirits (who come out when nobody is
+// watching), a frog for rainy days, a butterfly for fair ones (?spirits, ?frog, ?butterfly in scripted checks)
+const ball = new Ball({ parent: $('depth'), rng: rngFor(6) });
+const spirits = new Spirits({ parent: $('depth'), rng: rngFor(7), reduced: reduced(), auto: !manual || params.has('spirits') });
+const frog = new Frog({ parent: $('depth'), rng: rngFor(8), auto: !manual || params.has('frog') });
+const butterfly = new Butterfly({ parent: $('fx-world'), rng: rngFor(9), reduced: reduced(), auto: !manual || params.has('butterfly') });
+Object.assign(scene, { ball, spirits, frog, butterfly });
+scene.others = [ball, frog, ...spirits.list];
+let tinySteps = 0;
 // gusts of wind come on their own (scripted checks call them with ?wind or __zen.scene.gust())
 scene.autoGusts = !manual || params.has('wind');
 // …and so do shooting stars and curious fireflies after dark (?meteors, or __zen.scene.spawnMeteor())
 scene.autoMeteors = !manual || params.has('meteors');
+// …and the weather changes when it likes (?weather=rain|snow|sunshower|cloudy starts with that)
+scene.weather.auto = !manual;
+if (params.has('weather')) scene.setWeather(params.get('weather'), { dur: manual ? 1e6 : 80, instant: true });
 
 reducedMQ.addEventListener?.('change', () => {
   rig.setReducedMotion(reduced());
   brain.reduced = reduced();
   scene.reduced = reduced();
   birds.reduced = reduced();
+  spirits.reduced = reduced();
+  butterfly.reduced = reduced();
 });
 
 // --- touching Kon directly: boop the nose, pat the head ---
@@ -252,14 +269,19 @@ function tick(dt, ts) {
       scene.launchCrane(ev.star);
       if (coarseMQ.matches) wishInput.blur();
     }
+    // back after a while away: the pebbles thought nobody was looking
+    if (ev.type === 'return' && ev.away > 8) spirits.caught();
   }
   senses.self = mover.state();
   senses.body = rig.measure();
   senses.objects = scene.objects();
   const bird = birds.object();
   if (bird) senses.objects.push(bird);
+  for (const o of [ball.object(), frog.object(), spirits.object(senses.self), butterfly.object()]) if (o) senses.objects.push(o);
+  senses.snowfox = (scene.snowfoxT || 0) > 0;
   senses.places = scene.places;
   senses.night = scene.night;
+  senses.weather = scene.weatherInfo();
   senses.leafOnHead = !!scene.leafOnKon;
   senses.layout = scene.mode;
 
@@ -269,6 +291,8 @@ function tick(dt, ts) {
   for (const ev of mover.update(dt)) {
     if (ev.type === 'step') {
       scene.rake.pawPrint(ev.x, ev.y, ev.foot, ev.dir, depthScale(ev.y));
+      // paws in a puddle
+      if (scene.puddleAt(ev.x, ev.y)) { scene.splash(ev.x, ev.y, 0.32, true); sound.play('plip'); }
       pose.impulses.push({ type: 'step', foot: ev.foot, s: ev.gait === 'sneak' ? 0.3 : ev.gait === 'trot' ? 1.3 : 1 });
     }
     else if (ev.type === 'land') { pose.impulses.push({ type: 'land', s: ev.impact }); if (ev.kind === 'pounce') sound.play('clack', 0.4); }
@@ -283,17 +307,47 @@ function tick(dt, ts) {
     else if (em.type === 'scatterLeaf') scene.scatterLeaf(em.data);
     else if (em.type === 'snailPoke') scene.hideSnail();
     else if (em.type === 'blowLeaf') scene.blowLeaf();
-    else if (em.type === 'fireflyGo') scene.fireflyGo();
+    else if (em.type === 'fireflyGo') { scene.fireflyGo(); butterfly.flee(); }
+    else if (em.type === 'splash') scene.splash(em.data.x, em.data.y, em.data.k);
+    else if (em.type === 'shakeDrops') scene.shakeDrops(senses.body.center);
+    else if (em.type === 'ballBat') {
+      const d = Math.hypot(em.data.dx, em.data.dy) || 1;
+      ball.kick((em.data.dx / d) * em.data.power, (em.data.dy / d) * em.data.power * 1.5, 120, 'kon');
+      sound.play('bounce', 0.8);
+    }
+    else if (em.type === 'tsubuPoke') { spirits.poke(em.data); sound.play('tok', 0.6); }
+    else if (em.type === 'snowfox') scene.growSnowfox(em.data);
   }
   rig.wind = scene.wind;
   rig.update(dt, pose, where);
   const body = rig.measure();
   const clack = senses.events.some((e) => e.type === 'clack');
-  for (const ev of birds.update(dt, birdContext({ brain, kon: where, body, view: scene.vb, pointer: senses.pointer, clack, night: scene.night }))) {
+  const wx = scene.weather;
+  const falling = wx.rain > 0.2 || wx.snow > 0.2;
+  // (sparrows don't sit out in the rain any more than they stay up at night)
+  for (const ev of birds.update(dt, birdContext({ brain, kon: where, body, view: scene.vb, pointer: senses.pointer, clack, night: scene.night || falling }))) {
     if (ev.type === 'birdFlee' || ev.type === 'birdArrive') sound.play('flutter', ev.type === 'birdFlee' ? 1 : 0.6);
     else if (ev.type === 'birdChirp') sound.play('chirp');
     input.push(ev);
   }
+  for (const ev of ball.update(dt, { pointer: senses.pointer, kon: where })) {
+    if (ev.type === 'ballBounce') sound.play('bounce', ev.k);
+    else { if (ev.by === 'user') sound.play('bounce', 0.6); input.push(ev); }
+  }
+  for (const ev of spirits.update(dt, spiritContext({ brain, kon: where, view: scene.vb, pointer: senses.pointer, now: senses.now, night: scene.dark, rain: wx.rain > 0.2, clack }))) {
+    if (ev.type === 'tsubuRise') { scene.dustPuff(ev.x, ev.y); sound.play('tok', 0.5); }
+    else if (ev.type === 'tsubuPop') { scene.dustPuff(ev.x, ev.y + 8, 1.2); if (ev.by === 'user') sound.play('squeak'); input.push(ev); }
+    else if (ev.type === 'tsubuTok') sound.play('tok', 0.8);
+    else if (ev.type === 'tsubuStep') { if (tinySteps++ % 2 === 0) scene.rake.pawPrint(ev.x, ev.y, 'l', 1, depthScale(ev.y) * 0.3 * ev.size); }
+    else input.push(ev);
+  }
+  for (const ev of frog.update(dt, { pointer: senses.pointer, kon: where, wet: wx.wet, raining: wx.rain > 0.2 })) {
+    if (ev.type === 'frogCroak') sound.play('croak');
+    else if (ev.type === 'frogDive') { scene.splash(ev.x, ev.y, 0.6, true); sound.play('plop'); }
+    input.push(ev);
+  }
+  const fair = wx.cover < 0.42 && !falling;
+  for (const ev of butterfly.update(dt, { now: senses.now, view: scene.vb, pointer: senses.pointer, konNose: body.nose, konSitting: scene.konSitting, konCalm: scene.konCalm, clear: fair, day: scene.sky.p.stars < 0.15 && scene.sky.p.sun.up })) input.push(ev);
   scene.placeKon(where);
   // what the garden needs to know about Kon: where its head is, and whether it's sitting still
   const settled = !where.moving && !where.airborne;
@@ -301,6 +355,7 @@ function tick(dt, ts) {
   scene.konMoving = !settled;
   scene.konSitting = settled && !!where.seat && brain.state === 'IDLE' && !brain.life.act;
   scene.konStill = settled && (brain.isStill() || scene.konSitting);
+  scene.konDreaming = brain.state === 'SLEEPING' && brain.stateT > 3.5;
   scene.konCalm = settled && !['STARTLED', 'POUNCE', 'DIZZY', 'SATORI', 'WAKING', 'BOOPED', 'JUDGE'].includes(brain.state);
   // the camera pushes in on a moment
   const act = brain.idleAct && brain.idleAct.name;
@@ -311,13 +366,14 @@ function tick(dt, ts) {
     : act === 'wishStar' ? { x: h.x, y: h.y - 40, z: 1.07 }
     : act === 'breeze' ? { x: h.x, y: h.y, z: 1.04 }
     : brain.state === 'SATORI' ? { x: h.x, y: h.y + 40, z: 1.06 }
+    : scene.weddingFocus && scene.t < scene.weddingFocus.until ? scene.weddingFocus
     : null;
   scene.update(dt);
   scene.zen.update(dt, brain.zenInfo(), body.center);
   scene.updateCursor(dt, input.pointer);
   updateCaption();
   updateVoice(body);
-  sound.ambient(dt, { dark: scene.dark });
+  sound.ambient(dt, { dark: scene.dark, rain: scene.weather.rain, snow: scene.weather.snow });
 
   if (showDebug && ts - debugAt > 100) {
     debugAt = ts;
@@ -333,7 +389,7 @@ function tick(dt, ts) {
   }
 }
 
-const zen = { brain, rig, scene, input, sound, mover, birds };
+const zen = { brain, rig, scene, input, sound, mover, birds, ball, spirits, frog, butterfly };
 
 if (manual) {
   // Test mode: time only moves when a script calls __zen.advance(seconds, fn).

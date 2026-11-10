@@ -70,6 +70,8 @@ export function runDemo(zen, name, opts = {}) {
     brain.life.restUntil = 0;
     brain.life.act = { id, def, phase: 'go', t: 0, dur: 30, gait: opts.gait || 'walk', ...extra };
   };
+  // nothing of Kon's own choosing until the demo asks for it
+  const stay = () => { brain.zenArmed = false; brain.life.restUntil = 1e9; };
   const pretend = (act) => {
     forceAct(act);
     sweep(3.4);
@@ -319,6 +321,174 @@ export function runDemo(zen, name, opts = {}) {
       scene.spawnFlock();
       scene.flock.x = scene.baseVb.x + scene.baseVb.w * 0.4;
       adv(opts.t ?? 0.5);
+      break;
+    // ---- weather. rain: Kon under its leaf; &t: seconds in
+    case 'rain':
+    case 'snow':
+    case 'cloudy':
+      cursor.hidden = true;
+      scene.setWeather(name, { dur: 1e6, instant: true });
+      adv(opts.t ?? 9);
+      break;
+    // a puddle, and a fox who has seen it (?phase=wiggle|air|land)
+    case 'puddle': {
+      cursor.hidden = true;
+      stay();
+      scene.setWeather('rain', { dur: 1e6, instant: true });
+      scene.weather.wet = 1;
+      adv(4.2);
+      brain.startLife('puddle');
+      const phase = opts.phase || 'land';
+      until(() => brain.state === 'POUNCE' && brain.arg.phase === phase && (phase !== 'air' || zen.mover.state().jumpU > 0.5), 25);
+      adv(opts.t ?? (phase === 'land' ? 0.45 : 0.02));
+      break;
+    }
+    // the rain has just passed: a rainbow, and a wet fox
+    case 'rainbow':
+      cursor.hidden = true;
+      brain.zenArmed = false;
+      scene.setWeather('rain', { dur: 1e6, instant: true });
+      adv(5);
+      scene.setWeather('clear', { instant: true });
+      scene.weather.rain = 0;
+      scene.weather.bowT = 60;
+      adv(opts.t ?? 7);
+      break;
+    // rain out of a bright sky, and lanterns on the far shore (&u: how far the procession has come)
+    case 'sunshower':
+    case 'wedding':
+      cursor.hidden = true;
+      brain.zenArmed = false;
+      scene.setWeather('sunshower', { dur: 1e6, instant: true });
+      adv(4.5);
+      if (name === 'wedding') {
+        scene.startWedding();
+        scene.wx.wedding.t = 46 * (opts.u ? +opts.u : 0.5);
+      }
+      adv(opts.t ?? 3.2);
+      break;
+    // enough snow to build with
+    case 'snowfox':
+      cursor.hidden = true;
+      stay();
+      scene.setWeather('snow', { dur: 1e6, instant: true });
+      scene.weather.white = 0.95;
+      adv(2);
+      brain.startLife('snowfox');
+      until(() => brain.life.act && brain.life.act.id === 'snowfox' && brain.life.act.phase === 'do' && brain.life.act.t > (opts.t ?? 7.2), 40);
+      break;
+    // squeeze a cloud (&kon=1: the one right above Kon)
+    case 'cloudpoke': {
+      adv(1);
+      const c = scene.clouds.find((k) => k.shown > 0.9) || scene.clouds[0];
+      c.x = opts.kon ? 800 + scene.camX * 0.26 + 20 : scene.baseVb.x + scene.baseVb.w * 0.7;
+      c.v = 0.75;
+      adv(0.1);
+      const q = scene.farToScreen(c.x, c.y - c.h * c.s * 0.4, 0.26);
+      const r = app.getBoundingClientRect();
+      move(q.x, q.y);
+      scene.skyTap(q.x + r.left, q.y + r.top);
+      adv(opts.t ?? 1.5);
+      break;
+    }
+    // a cloud that looks like something (?shape=fox|fish|rabbit)
+    case 'cloudshape': {
+      cursor.hidden = true;
+      const c = scene.clouds[0];
+      scene.shapeCloud(c, opts.shape || 'fox');
+      c.told = false;
+      c.v = 0.6;
+      c.x = scene.baseVb.x + scene.baseVb.w * 0.62 + scene.camX * 0.26;
+      adv(opts.t ?? 2.2);
+      break;
+    }
+    // the pebbles (?mode=parade|tower|zen|lantern; &watch=1: the cursor moves, and they are only pebbles; &kon=1: Kon goes to look)
+    case 'tsubu': {
+      cursor.hidden = !opts.watch;
+      stay();
+      if (!opts.kon) brain.life.lastVisit.tsubu = 1e9;
+      adv(1);
+      zen.spirits.outing(opts.mode || 'parade', zen.spirits.ctx, opts.x ? { x: +opts.x, y: +opts.y } : { x: 868, y: 922 });
+      adv(opts.rise ? +opts.rise : 6.5);
+      if (opts.kon) {
+        brain.startLife('tsubu');
+        until(() => brain.life.act && brain.life.act.id === 'tsubu' && brain.life.act.phase === 'do' && brain.life.act.t > (opts.t ?? 2.4), 30);
+      } else if (opts.watch) {
+        const sp = zen.spirits.out[0];
+        const q = scene.toScreen(sp.x + 120, sp.y - 90);
+        adv(opts.t ?? 0.5, (t) => move(q.x + t * 60, q.y));
+      } else adv(opts.t ?? 0);
+      break;
+    }
+    // true meditation, in company
+    case 'tsubu-zen':
+      cursor.hidden = true;
+      until(() => brain.isStill(), 30);
+      zen.spirits.outing('zen', zen.spirits.ctx, { x: 868, y: 922 });
+      adv(opts.t ?? 12);
+      break;
+    // the temari: Kon bats it about (&fetch=1: you kicked it first)
+    case 'ball': {
+      stay();
+      cursor.hidden = !opts.fetch;
+      adv(1);
+      if (opts.fetch) {
+        const q = scene.toScreen(zen.ball.x + 60, zen.ball.y - 16);
+        adv(0.3, (t) => move(q.x - t * 400, q.y));
+      } else brain.startLife('ball', { max: 3 });
+      until(() => brain.life.act && brain.life.act.id === 'ball' && brain.life.act.phase === 'bat' && brain.life.act.t > (opts.t ?? 0.42), 20);
+      break;
+    }
+    // a rainy day's frog, and Kon's attempt at its language
+    case 'frog': {
+      cursor.hidden = true;
+      stay();
+      scene.setWeather('rain', { dur: 1e6, instant: true });
+      adv(4.2);
+      zen.frog.appear();
+      until(() => zen.frog.state === 'sit', 8);
+      if (opts.peek) { adv(opts.t ?? 0.5); break; }
+      zen.frog.bold = 2;   // (this one holds its ground)
+      brain.startLife('frog');
+      until(() => brain.life.act && brain.life.act.id === 'frog' && brain.life.act.phase === 'do', 20);
+      zen.frog.croakAt = 0;
+      adv(opts.t ?? 1.1);
+      break;
+    }
+    // a butterfly (?on=flower|cursor|nose)
+    case 'butterfly': {
+      const on = opts.on || 'flower';
+      cursor.hidden = on !== 'cursor';
+      brain.zenArmed = false;
+      adv(1);
+      if (on === 'cursor') move(H.x + 250, H.y - 60);
+      zen.butterfly.visit();
+      if (on === 'nose') { zen.butterfly.goal = { kind: 'nose', x: 0, y: 0 }; zen.butterfly.nosed = true; }
+      until(() => zen.butterfly.state === on, 30);
+      adv(opts.t ?? 1.2);
+      break;
+    }
+    case 'tail':
+      cursor.hidden = true;
+      stay();
+      brain.startLife('tail', { spot: { x: 900, y: 915 } });
+      until(() => brain.life.act && brain.life.act.id === 'tail' && brain.life.act.phase === 'do' && brain.life.act.t > (opts.t ?? 2), 20);
+      break;
+    // after dark: paper lanterns on the lake, and something watching from the trees
+    case 'toro':
+      cursor.hidden = true;
+      adv(1);
+      scene.startToro();
+      for (const L of scene.toro) L.x += 300;
+      scene.startEyes();
+      adv(opts.t ?? 1.5);
+      break;
+    // fast asleep, and dreaming (&n: which dream)
+    case 'dream':
+      cursor.hidden = true;
+      adv(40);
+      until(() => brain.state === 'SLEEPING', 40);
+      adv(4.6 + (opts.n ? +opts.n : 0) * 4.8 + 2.2);
       break;
     case 'gust':
       cursor.hidden = true;

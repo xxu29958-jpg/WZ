@@ -30,9 +30,26 @@ def main():
             time.sleep(0.1)
         # boot check: the real page starts, animates, and throws nothing
         boot = []
-        for path in ["/?motion=full", "/?demo=satori&motion=full"]:
+        for path in ["/?motion=full", "/?demo=satori&motion=full", "/?motion=full&hour=14&weather=rain"]:
             ff.open_sized(base, path, 1280, 800)
-            ff.js("window.__errs = []; window.addEventListener('error', (e) => window.__errs.push(String(e.message)));")
+            # (a NaN written into an SVG attribute throws nothing: the browser only grumbles in its console. Catch those too.)
+            ff.js("""
+              window.__errs = [];
+              window.addEventListener('error', (e) => window.__errs.push(String(e.message)));
+              const set = Element.prototype.setAttribute;
+              Element.prototype.setAttribute = function (k, v) {
+                if (typeof v === 'string' && /NaN|undefined|Infinity/.test(v) && window.__errs.length < 5) window.__errs.push(`bad ${k} on #${this.id || this.tagName}: ${v.slice(0, 60)}`);
+                return set.call(this, k, v);
+              };
+            """)
+            if "weather" in path:
+                # everybody out at once: the spirits, the frog, the butterfly, the ball, the lake's lanterns
+                ff.js("""
+                  const z = window.__zen; z.brain.zenArmed = false;
+                  z.spirits.outing(null, z.spirits.ctx, { x: 868, y: 922 }); z.frog.appear(); z.butterfly.visit(); z.ball.kick(300, 80, 200, 'user');
+                  z.scene.startToro(); z.scene.startEyes(); z.scene.startWedding(); z.scene.fishJump(); z.scene.growSnowfox(1);
+                """)
+                time.sleep(5.0)
             t0 = ff.js("return window.__zen.rig.t")
             time.sleep(1.0)
             t1 = ff.js("return window.__zen.rig.t")
