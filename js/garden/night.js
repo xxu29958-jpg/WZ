@@ -47,9 +47,10 @@ export class GardenNight {
 
   /** A click or tap on the sky: catch a falling star, or poke the moon. Returns true if it was used. */
   skyTap(cx, cy) {
-    if (this.sky.p.stars < 0.4) return false;
     const r = this.app.getBoundingClientRect();
     const px = cx - r.left, py = cy - r.top;
+    // (by day there are only clouds to poke)
+    if (this.sky.p.stars < 0.4) return this.cloudTap(px, py);
     const m = this.meteor;
     if (m && !m.caught) {
       const s = this.farToScreen(m.x, m.y, 0.22);
@@ -62,7 +63,7 @@ export class GardenNight {
       this.emit({ type: 'sfx', name: 'mochi' });
       return true;
     }
-    return false;
+    return this.cloudTap(px, py);
   }
 
   catchMeteor(m) {
@@ -109,7 +110,7 @@ export class GardenNight {
       if (this.nextMeteorAt === undefined) this.nextMeteorAt = this.t + 10 + this.rng() * 10;
       if (this.t > this.nextMeteorAt) {
         this.nextMeteorAt = this.t + 28 + this.rng() * 45;
-        if (this.autoMeteors && !this.reduced) this.spawnMeteor();
+        if (this.autoMeteors && !this.reduced && this.weather.cover < 0.4) this.spawnMeteor();   // (no stars fall through cloud)
       }
     }
     if (this.sparks) {
@@ -165,7 +166,7 @@ export class GardenNight {
         F.f.el.setAttribute('cy', f2(F.y));
         F.f.el.style.opacity = f2(F.f.on);
       }
-    } else if (this.dark && this.konSitting && this.autoMeteors && !this.reduced) {
+    } else if (this.dark && this.konSitting && this.autoMeteors && !this.reduced && this.weather.white < 0.02 && this.weather.rain < 0.1) {
       if (this.nextFlyAt === undefined) this.nextFlyAt = this.t + 25 + this.rng() * 30;
       if (this.t > this.nextFlyAt) {
         this.nextFlyAt = this.t + 50 + this.rng() * 60;

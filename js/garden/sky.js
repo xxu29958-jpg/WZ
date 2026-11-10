@@ -158,6 +158,7 @@ export class Sky {
     this.hour = hour;
     this.lapse = null;
     this.applied = '';
+    this.overcast = 0;           // 0–1: how much cloud greys the sky (weather.js sets it)
     this.p = paletteAt(hour);
     this.apply(true);
   }
@@ -209,11 +210,30 @@ export class Sky {
 
   /** Blend the palette for the current hour and push it to CSS. */
   apply(force = false) {
-    const p = (this.p = paletteAt(this.hour));
+    const pure = (this.p = paletteAt(this.hour));
+    // under cloud everything loses color and a little light (the palette itself stays as the hour made it)
+    const k = this.overcast;
+    const grey = (c, f, dim = 1) => {
+      const l = c[0] * 0.3 + c[1] * 0.5 + c[2] * 0.2;
+      return [lerp(c[0], l * 0.93, f) * dim, lerp(c[1], l * 0.96, f) * dim, lerp(c[2], l * 1.04, f) * dim];
+    };
+    const p = k < 0.005 ? pure : {
+      ...pure,
+      sky: pure.sky.map((c) => grey(c, 0.78 * k, 1 - 0.1 * k)), ridge: pure.ridge.map((c) => grey(c, 0.5 * k, 1 - 0.06 * k)),
+      slope: pure.slope.map((c) => grey(c, 0.32 * k, 1 - 0.08 * k)), peak: grey(pure.peak, 0.5 * k), snow: grey(pure.snow, 0.4 * k, 1 - 0.08 * k),
+      water: grey(pure.water, 0.6 * k, 1 - 0.1 * k), mist: [grey(pure.mist[0], 0.6 * k), pure.mist[1]],
+    };
     // the light that will fall on each height of the sky (see light.js: it lifts toward the top)
-    const avg = mixRGB(p.amb, p.ambSun, 0.5);
-    const amb = (y) => mixRGB(avg, [255, 255, 255], skyLift(p, y));
+    const avg = mixRGB(pure.amb, pure.ambSun, 0.5);
+    const amb = (y) => mixRGB(avg, [255, 255, 255], skyLift(pure, y));
+    // clouds: lit from above (warm when the sun is low), shaded below; heavier and greyer as they gather
+    const day = 1 - 0.8 * pure.stars;
+    const lit = grey(mixRGB(mixRGB(pure.mist[0], [255, 255, 255], 0.55 * day), pure.glow, 0.3 * (1 - pure.stars) * (1 - k)), 0.7 * k, 1 - 0.2 * k);
+    const shadeC = grey(mixRGB(pure.sky[1], pure.ridge[0], 0.45), 0.6 * k, 1 - 0.14 * k);
+    const body = mixRGB(lit, shadeC, 0.2 + 0.35 * k);
     const vars = {
+      '--cloud': css(under(body, amb(250))), '--cloud-hi': css(under(lit, amb(230))), '--cloud-shade': css(under(shadeC, amb(270))),
+      '--overcast-c': css(under(grey(mixRGB(pure.sky[1], pure.sky[2], 0.5), 0.85, 0.94), amb(300))),
       '--sky0': css(under(p.sky[0], amb(150))), '--sky1': css(under(p.sky[1], amb(280))),
       '--sky2': css(under(p.sky[2], amb(405))), '--sky3': css(under(p.sky[3], amb(470))),
       '--ridge0': css(under(p.ridge[0], amb(330))), '--ridge1': css(under(p.ridge[1], amb(385))), '--ridge2': css(under(p.ridge[2], amb(425))),

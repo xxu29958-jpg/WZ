@@ -67,10 +67,13 @@ export class Sound {
    * The garden's own soft sounds, called every frame: crickets after dark,
    * and by day a bird now and then somewhere down in the valley.
    */
-  ambient(dt, { dark = false } = {}) {
+  ambient(dt, { dark = false, rain = 0, snow = 0 } = {}) {
     if (!this.on || !this.ctx) return;
+    this.rainBed(rain);
     this.ambT = (this.ambT ?? 2) - dt;
     if (this.ambT > 0) return;
+    // in the rain, the crickets and the birds keep quiet; snow hushes everything
+    if (rain > 0.3 || snow > 0.3) { this.ambT = 2; return; }
     const t = this.ctx.currentTime + 0.02;
     const pan = Math.random() * 1.3 - 0.65;
     if (dark) {
@@ -86,6 +89,32 @@ export class Sound {
       for (let i = 0; i < n; i++) this.tone(f * (1 + i * 0.07), t + i * 0.17, { d: 0.07, peak: 0.011, glide: 1.2, pan });
       this.ambT = 7 + Math.random() * 13;
     }
+  }
+
+  /** Rain on leaves and sand: one long loop of soft noise whose loudness follows the rain. */
+  rainBed(k) {
+    if (!this.rain) {
+      if (k < 0.02) return;
+      const len = this.ctx.sampleRate * 2;
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      const src = this.ctx.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const hp = this.ctx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = 900;
+      const lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 6200;
+      const g = this.ctx.createGain();
+      g.gain.value = 0;
+      src.connect(hp).connect(lp).connect(g).connect(this.master);
+      src.start();
+      this.rain = g;
+    }
+    this.rain.gain.setTargetAtTime(0.055 * Math.min(1, k), this.ctx.currentTime, 0.4);
   }
 
   play(name, k = 1) {
@@ -180,6 +209,52 @@ export class Sound {
       case 'chirp': // a sparrow's two-note cheep
         this.tone(3900, t, { d: 0.05, peak: 0.05, glide: 1.25 });
         this.tone(4400, t + 0.09, { d: 0.06, peak: 0.045, glide: 0.85 });
+        break;
+      case 'splash': // a paw (or a whole fox) in a puddle
+        this.noise(t, { d: 0.28, peak: 0.16 * Math.min(1.3, k), freq: 1900, q: 0.5 });
+        this.tone(260, t, { d: 0.12, peak: 0.1 * Math.min(1.3, k), glide: 0.5 });
+        break;
+      case 'plip': // one drop, or a fish, far away
+        this.tone(1250, t, { d: 0.07, peak: 0.05, glide: 1.7 });
+        break;
+      case 'plop': // something small diving into water
+        this.tone(420, t, { d: 0.11, peak: 0.16, glide: 0.42 });
+        this.noise(t + 0.03, { d: 0.14, peak: 0.07, freq: 1500, q: 0.6 });
+        break;
+      case 'squeeze': // a cloud, wrung out
+        this.tone(300, t, { type: 'triangle', a: 0.04, d: 0.22, peak: 0.07, glide: 1.9 });
+        this.noise(t + 0.2, { d: 1.6, peak: 0.035, freq: 3200, q: 0.4 });
+        break;
+      case 'pon': // a leaf umbrella opening
+        this.tone(520, t, { type: 'triangle', d: 0.09, peak: 0.16, glide: 1.6 });
+        this.noise(t, { d: 0.06, peak: 0.08, freq: 2600, q: 0.8 });
+        break;
+      case 'shake': // a wet fox shaking itself dry
+        for (let i = 0; i < 7; i++) this.noise(t + i * 0.06, { d: 0.05, peak: 0.07, freq: 2000 + (i % 2) * 900, q: 0.7 });
+        break;
+      case 'croak': // a frog: two creaky, rising notes
+        for (let i = 0; i < 2; i++) {
+          const o = this.tone(150 + i * 26, t + i * 0.2, { type: 'sawtooth', a: 0.02, d: 0.13, peak: 0.07 * k, glide: 1.25 });
+          const lfo = this.ctx.createOscillator();
+          const lg = this.ctx.createGain();
+          lfo.frequency.value = 34;
+          lg.gain.value = 36;
+          lfo.connect(lg);
+          lg.connect(o.frequency);
+          lfo.start(t + i * 0.2);
+          lfo.stop(t + i * 0.2 + 0.2);
+        }
+        break;
+      case 'squeak': // a pebble spirit, startled
+        this.tone(1900, t, { d: 0.06, peak: 0.07 * k, glide: 1.5 });
+        this.tone(2500, t + 0.07, { d: 0.05, peak: 0.05 * k, glide: 1.2 });
+        break;
+      case 'tok': // little stones settling on each other
+        this.tone(900 + Math.random() * 300, t, { type: 'triangle', d: 0.04, peak: 0.1 * k, glide: 0.7 });
+        break;
+      case 'bounce': // the temari on the sand
+        this.tone(190, t, { d: 0.09, peak: 0.16 * Math.min(1, k), glide: 0.6 });
+        this.tone(1480, t, { d: 0.25, peak: 0.02 * Math.min(1, k) });
         break;
       case 'lantern':
         this.noise(t, { d: 0.25, peak: 0.05, freq: 600, q: 0.6 });

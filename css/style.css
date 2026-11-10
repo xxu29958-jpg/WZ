@@ -236,8 +236,88 @@ html, body {
 .mist { fill: var(--mist, #fbf8ee); opacity: var(--mist-a, .85); }
 .kasumi-stop { stop-color: var(--mist, #fbf8ee); }
 #kasumi { opacity: calc(var(--mist-a, .85) * .8); }
-/* the night sky */
-#layer-stars { opacity: var(--stars, 0); }
+/* (taps on the small residents are worked out from where they land on the ground: see props.js) */
+#kon-umbrella, #kon-umbrella-stem, #kon-snowcap, .temari, .tsubu, .frog, .butterfly, #snowfox, #dream { pointer-events: none; }
+/* Kon's leaf umbrella */
+.umb-stem-ol { fill: none; stroke: var(--ink); stroke-width: 9; stroke-linecap: round; }
+.umb-stem { fill: none; stroke: #86a653; stroke-width: 4.6; stroke-linecap: round; }
+.umb-leaf { fill: #8fb35c; }
+.umb-under { fill: #5f8040; }
+.umb-vein { fill: none; stroke: #5f8040; stroke-width: 2.2; stroke-linecap: round; opacity: .8; }
+.umb-hi { fill: none; stroke: #c6dc94; stroke-width: 3.4; stroke-linecap: round; opacity: .7; }
+/* lying snow: caps on the scenery, a dusting on the trees, a little pile on a fox who sits still */
+.snow-cap { fill: #f7f8fc; opacity: var(--white, 0); pointer-events: none; }
+.snow-cap-kon { fill: #f7f8fc; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+.is-snowy .canopy-hi { fill: #fff; opacity: calc(.16 + var(--white, 0) * .5); }
+.is-snowy .pine-pad-hi, .is-snowy .shrub-hi { fill: color-mix(in srgb, #f7f8fc calc(var(--white, 0) * 92%), #76a460); }
+.is-snowy #fireflies, .is-rainy #fireflies { display: none; }   /* (no fireflies in the snow, or out in the rain) */
+/* the snow fox */
+.snowball { fill: #f7f8fc; }
+.snow-shadow { fill: #5a6a8a; opacity: .22; }
+.snow-twig { fill: none; stroke: #6b4a35; stroke-width: 3.2; stroke-linecap: round; }
+/* the temari */
+.temari .ink-thin { stroke-width: 1.8; }
+.temari-base { fill: #fbf1dc; }
+.temari-rim { fill: none; }
+.temari-a { fill: none; stroke: var(--red); stroke-width: 3; }
+.temari-b { fill: none; stroke: #e9b44c; stroke-width: 3; }
+.temari-c { fill: none; stroke: #4f8f8a; stroke-width: 3; }
+.temari-dot { fill: var(--red-deep); }
+.temari-hi { fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; opacity: .8; }
+.temari-shadow, .tsubu-shadow, .frog-shadow { fill: #4a3424; opacity: .26; }
+/* tsubu: the pebbles that are not pebbles */
+.tsubu-body { stroke: var(--ink); stroke-width: 1.5; stroke-linejoin: round; }
+.tsubu-t0 .tsubu-body { fill: #d9d2c0; }
+.tsubu-t1 .tsubu-body { fill: #c4bfb2; }
+.tsubu-t2 .tsubu-body { fill: #e6dcc6; }
+.tsubu-moss { fill: var(--moss); }
+.tsubu-hi { fill: none; stroke: #fff; stroke-width: 1.4; stroke-linecap: round; opacity: .6; }
+.tsubu-eye { fill: #1d120c; }
+.tsubu-shut { fill: none; stroke: #1d120c; stroke-width: 1.2; stroke-linecap: round; }
+.tsubu-blush { fill: var(--blush); opacity: .75; }
+.tsubu-stem { fill: none; stroke: #5f8040; stroke-width: 1.4; stroke-linecap: round; }
+.tsubu-leaf { fill: #8fb35c; stroke: #4c6a30; stroke-width: .9; stroke-linejoin: round; }
+.tsubu-brolly { fill: var(--red); stroke: var(--ink); stroke-width: 1.1; stroke-linejoin: round; }
+/* the frog */
+.frog-ink { stroke: var(--ink); stroke-width: 1.4; stroke-linejoin: round; }
+.frog-body { fill: #86b05a; }
+.frog-belly { fill: #e9edc4; }
+.frog-sac { fill: #f3f0cf; }
+.frog-hi { fill: none; stroke: #c9e39a; stroke-width: 1.5; stroke-linecap: round; opacity: .8; }
+.frog-toe, .frog-mouth { fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.frog-pupil { fill: #1d120c; }
+.frog-ripple { fill: none; stroke: #fff; stroke-width: 1.3; stroke-linecap: round; opacity: .7; }
+/* the butterfly */
+.bfly-wing { fill: #fdf6dc; stroke: var(--ink); stroke-width: 1.1; stroke-linejoin: round; }
+.bfly-wing.low { fill: #f7e6a4; }
+.bfly-tip { fill: #4a3a52; }
+.bfly-spot { fill: #e58a4a; }
+.bfly-body { fill: none; stroke: #2b1d18; stroke-width: 2.4; stroke-linecap: round; }
+.bfly-feeler { fill: none; stroke: #2b1d18; stroke-width: .9; stroke-linecap: round; }
+/* weather: clouds, the overcast veil, the rainbow, puddles, lying snow */
+.cloud-body { fill: var(--cloud, #fff); }
+.cloud-hi { fill: var(--cloud-hi, #fff); opacity: .7; }
+.cloud-belly { fill: var(--cloud-shade, #c9d3dc); opacity: .55; }
+.overcast-stop { stop-color: var(--overcast-c, #aab3bd); }
+.overcast { opacity: var(--overcast, 0); }
+.bow-band { fill: none; stroke-width: 4.8; }
+#sun { opacity: var(--sun-a, 1); }
+.wet-sand { fill: #5b4a38; }
+.snow-sand { fill: #f4f6fb; opacity: calc(var(--white, 0) * .82); }
+.puddle-rim { fill: #6d5a45; opacity: .3; }
+.puddle-water { fill: var(--water-sky, #a3c6ca); stroke: rgba(58, 36, 23, .28); stroke-width: 1.5; }
+/* what Kon dreams about */
+.dream-bubble { fill: #fffaf0; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+.dream-ink { fill: none; stroke: var(--ink); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.dream-tofu { fill: #d99a4e; stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; }
+.dream-rice { fill: #fffdf6; stroke: var(--ink); stroke-width: 1.4; }
+.dream-bird { fill: #b07a4f; stroke: var(--ink); stroke-width: 1.5; stroke-linejoin: round; }
+.dream-arrow { fill: #fff; stroke: var(--ink); stroke-width: 1.7; stroke-linejoin: round; }
+.dream-heart { fill: var(--red); }
+.puddle-hi { fill: none; stroke: #fff; stroke-width: 2.4; stroke-linecap: round; opacity: .6; }
+#weather { position: absolute; left: 0; top: 0; width: 100%; height: 100%; pointer-events: none; }
+/* the night sky (clouds hide the stars) */
+#layer-stars { opacity: calc(var(--stars, 0) * var(--clear, 1)); }
 #milky { opacity: var(--stars, 0); }
 .star-dust { fill: #eef1ff; opacity: .75; }
 .star { fill: #fff8e8; animation: twinkle 4s ease-in-out infinite alternate; }

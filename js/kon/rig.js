@@ -57,6 +57,7 @@ export class FoxRig {
       earL: q('#kon-ear-l'),
       earR: q('#kon-ear-r'),
       ahoge: q('#kon-ahoge'),
+      snowcap: q('#kon-snowcap'),
       face: q('#kon-face'),
       mask: q('#kon-mask'),
       snout: q('#kon-snout'),
@@ -80,6 +81,8 @@ export class FoxRig {
       fx: q('#kon-fx'),
       shadow: q('.kon-shadow'),
       sign: q('#kon-sign'),
+      umbrella: q('#kon-umbrella'),
+      umbStem: q('#kon-umbrella-stem'),
       signText: q('#kon-sign-text'),
       upper: q('#kon-upper'),
       belly: q('#kon-belly'),
@@ -110,7 +113,7 @@ export class FoxRig {
       pawLx: S(-PAW_REST.x, 4.2, 0.72), pawLy: S(PAW_REST.y, 4.2, 0.72),
       pawRx: S(PAW_REST.x, 4.2, 0.72), pawRy: S(PAW_REST.y, 4.2, 0.72),
       tailBase: S(0, 1.1, 0.85), tailCurl: S(0, 1.1, 0.85), tailAmp: S(0.15, 0.9, 1),
-      float: S(0, 0.55, 0.62), sign: S(0, 4.5, 0.45),
+      float: S(0, 0.55, 0.62), sign: S(0, 4.5, 0.45), umbrella: S(0, 3.4, 0.42), umbTilt: S(0, 1.8, 0.3),
       stand: S(0, 3.2, 0.72), bodyYaw: S(0, 3.6, 0.85), tailSide: S(1, 1.6, 0.8),
     };
     this.tailSideT = 1;
@@ -370,6 +373,14 @@ export class FoxRig {
     s.ahoge.v -= leanV * 1.4 * m + s.tilt.v * dt * 30 * m;
     const ahoge = s.ahoge.step(dt, (P.ahoge || 0) - tilt * 0.4 - w * 26 + flut * 3);
     el.ahoge.setAttribute('transform', `${tr(2 + yaw * 6, -72 + pitch * 2)} rotate(${f2(ahoge)})`);
+
+    // snow that has settled between the ears (it stays as long as Kon keeps still)
+    const cap = P.snowHat || 0;
+    if (cap > 0.01 || this.capShown) {
+      this.capShown = cap > 0.01;
+      el.snowcap.setAttribute('opacity', f2(clamp(cap * 1.4)));
+      el.snowcap.setAttribute('transform', `${tr(yaw * 5, pitch * 2 - 7 + (1 - clamp(cap)) * 6)} scale(${f2(0.7 + 0.3 * clamp(cap))} ${f2(0.4 + 0.6 * clamp(cap))})`);
+    }
 
     s.bell.v -= leanV * 0.9 * m;
     const bell = s.bell.step(dt, -lean * 0.6);

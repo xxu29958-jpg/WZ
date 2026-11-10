@@ -388,6 +388,31 @@ export class Light {
       c.fillStyle = rgba([255, 205, 130], 0.35 * night);
       c.fillRect(x - 0.6, y + 6 * S, 1.2, 9 * S);
     }
+    // paper lanterns adrift on the lake, each with its light on the water
+    for (const L of sc.toro || []) {
+      if (L.x < 556 || L.y > sc.lakeOpen(L.x) - 6) continue;
+      const a = smoothstep(556, 590, L.x) * (1 - smoothstep(1040, 1090, L.x));
+      const [x, y] = at(L.x, L.y + Math.sin(t * 1.3 + L.seed) * 0.8);
+      const r = 5.5 * S + 2;
+      c.globalAlpha = night * a * (0.82 + 0.18 * noise1(t * 3 + L.seed, L.seed));
+      c.drawImage(this.lampSprite, x - r, y - r, r * 2, r * 2);
+      c.fillStyle = rgba([255, 196, 120], 0.38 * night * a);
+      c.fillRect(x - 0.7, y + 4 * S, 1.4, 9 * S);
+    }
+    c.globalAlpha = 1;
+    // a pair of eyes in the dark of the trees
+    const E = sc.eyes;
+    if (E) {
+      const [x, y] = at(E.x, E.y);
+      const fade = smoothstep(0, 0.6, E.t) * (1 - smoothstep(E.dur - 0.5, E.dur, E.t));
+      const blink = (E.t % 2.3) > 2.12 ? 0.15 : 1;
+      c.fillStyle = rgba([226, 240, 150], 0.95 * fade * night);
+      for (const dx of [-3.4, 3.4]) {
+        c.beginPath();
+        c.ellipse(x + dx * S, y, 1.7 * S + 0.4, (1.9 * S + 0.4) * blink, 0, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
     // windows in the village, and their reflections (someone goes to bed now and then)
     const R = 7 * S + 2;
     for (const v of sc.village || []) {

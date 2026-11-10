@@ -743,6 +743,342 @@ Object.assign(ACTS, {
   },
 });
 
+// ---------------- weather, and the garden's small mysteries ----------------
+
+Object.assign(ACTS, {
+  // a drop on the nose: look up, then hold out a paw to make sure
+  rainNotice: {
+    caption: 'rainStart',
+    pose(t, P, c) {
+      P.earPerk = 0.5;
+      c.once('flick', () => c.impulse({ type: 'earFlick', side: 'r', s: 0.8 }));
+      if (t < 1.1) {
+        P.gaze = c.away(30, -420);
+        P.headFollow = 0.9;
+        P.pitch = -0.2;
+        P.eyeOpen = 1.1;
+        P.browL = P.browR = 0.6;
+        if (t > 0.5) c.once('blink', () => { c.impulse({ type: 'blink' }); c.impulse({ type: 'flinch', s: 0.3 }); });
+      } else {
+        P.armL = { x: -84, y: -70, space: 'body' };
+        P.gaze = c.away(-90, 60);
+        P.headFollow = 0.8;
+        P.mouthOpen = 0.12;
+        P.browL = 0.5;
+        P.tilt = -8;
+      }
+    },
+  },
+
+  snowNotice: {
+    caption: 'snowStart',
+    pose(t, P, c) {
+      P.gaze = c.away(Math.sin(t * 1.3) * 120, -420);
+      P.headFollow = 0.95;
+      P.pitch = -0.25;
+      P.sparkle = 1;
+      P.eyeOpen = 1.14;
+      P.mouthOpen = 0.3;
+      P.earPerk = 1;
+      P.tailAmp = 0.8;
+      P.tailSpeed = 2.6;
+      P.posture = 'stand';
+      P.stretch = 0.3;
+      if (t > 1.6) { P.armL = { x: -70, y: -120, space: 'body' }; P.armR = { x: 70, y: -120, space: 'body' }; P.smile = 1; }
+    },
+  },
+
+  // a wet fox shakes from nose to tail
+  shakeDry: {
+    caption: 'shakeDry',
+    pose(t, P, c) {
+      P.gaze = null;
+      P.headFollow = 0;
+      if (t < 0.35) {
+        P.crouch = 0.3;
+        P.shutL = P.shutR = 1;
+        P.shutStyle = 'squeeze';
+      } else if (t < 1.4) {
+        const w = Math.sin(t * 40);
+        c.once('drops', () => { c.emit('shakeDrops'); c.emit('sfx', 'shake'); });
+        P.lean = w * 7;
+        P.tilt = Math.sin(t * 40 + 1.2) * 14;
+        P.yaw = w * 0.3;
+        P.earL = w * 26;
+        P.earR = -w * 26;
+        P.ahoge = w * 30;
+        P.shutL = P.shutR = 1;
+        P.shutStyle = 'squeeze';
+        P.tailAmp = 1;
+        P.tailSpeed = 4;
+        P.blink = false;
+      } else {
+        P.smile = 0.85;
+        P.shutL = P.shutR = 1;
+        P.shutStyle = 'happy';
+        P.headScale = 1.04;   // fluffier than before
+        P.blush = 0.3;
+      }
+    },
+  },
+
+  rainbowAwe: {
+    caption: 'rainbow',
+    pose(t, P, c) {
+      P.gaze = c.target;
+      P.headFollow = 0.95;
+      P.sparkle = 1;
+      P.eyeOpen = 1.14;
+      P.pupil = 1.3;
+      P.mouthOpen = 0.32;
+      P.earPerk = 1;
+      P.posture = 'stand';
+      P.stretch = 0.4;
+      P.reachY = -10;
+      P.tailAmp = 0.7;
+      P.tailSpeed = 2.2;
+      if (t > 1.4 && t < 3.4) {
+        P.armL = { x: -66, y: -126, space: 'body' };
+        if (!P.umbrella) P.armR = { x: 66, y: -126, space: 'body' };
+        P.smile = 1;
+      }
+    },
+  },
+
+  // rained on by one small cloud: who did that?
+  sprinkled: {
+    caption: 'cloudPokeKon',
+    pose(t, P, c) {
+      P.earPerk = -0.6;
+      if (t < 1.3) {
+        P.gaze = c.away(0, -420);
+        P.headFollow = 0.9;
+        P.pitch = -0.25;
+        P.shutL = 0.7;
+        P.shutStyle = 'squeeze';
+        P.browTiltL = P.browTiltR = -0.5;
+        P.mouthOpen = 0.15;
+      } else if (t < 2.2) {
+        P.yaw = Math.sin(t * 26) * 0.5;
+        P.shutL = P.shutR = 1;
+        P.shutStyle = 'squeeze';
+        c.once('shake', () => c.emit('shakeDrops'));
+      } else {
+        P.gaze = null;
+        P.headFollow = 0;
+        P.pout = 0.9;
+        P.browTiltL = P.browTiltR = -0.5;
+        P.lidL = P.lidR = 0.3;
+      }
+    },
+  },
+
+  // that cloud looks like something: point it out
+  pointCloud: {
+    caption: 'cloudFox',
+    pose(t, P, c) {
+      P.gaze = c.target;
+      P.headFollow = 0.95;
+      P.sparkle = 0.8;
+      P.eyeOpen = 1.1;
+      P.mouthOpen = 0.28;
+      P.smile = 0.8;
+      P.earPerk = 0.9;
+      P.tailAmp = 0.7;
+      P.tailSpeed = 2.2;
+      // (with the paw on that side, so the arm doesn't cross the face)
+      const arm = c.target.x < c.body().head.x || P.umbrella ? 'armL' : 'armR';
+      if (t > 0.4) P[arm] = { x: c.target.x, y: c.target.y, space: 'world' };
+      if (t > 2.4) { P.gaze = null; P.headFollow = 0; P.smile = 1; }  // "did you see it too?"
+    },
+  },
+
+  // the fox wedding: hush… and a bow, as is proper
+  weddingBow: {
+    caption: 'foxWedding',
+    pose(t, P, c) {
+      P.posture = 'stand';
+      P.earPerk = 0.8;
+      if (t < 2.4) {
+        P.gaze = c.target;
+        P.headFollow = 0.95;
+        P.eyeOpen = 1.14;
+        P.sparkle = 0.6;
+        P.armL = { x: -4, y: 30, space: 'head' };   // a paw to the lips
+        P.pucker = 0.6;
+      } else {
+        const b = smoothstep(2.4, 3.2, t) * (1 - smoothstep(6.2, 7, t));
+        P.gaze = null;
+        P.headFollow = 0;
+        P.armL = GASSHO_L;
+        if (!P.umbrella) P.armR = GASSHO_R;
+        P.pitch = 0.55 * b;
+        P.reachY = 9 * b;
+        P.shutL = P.shutR = b;
+        P.shutStyle = 'calm';
+        P.smile = 0.5;
+        P.earPerk = -0.2;
+      }
+    },
+  },
+
+  rainListen: {
+    caption: 'rainListen',
+    pose(t, P, c) {
+      P.gaze = null;
+      P.headFollow = 0;
+      P.shutL = P.shutR = smoothstep(0.2, 0.8, t);
+      P.shutStyle = 'happy';
+      P.smile = 0.7;
+      P.pitch = -0.12;
+      P.lean = Math.sin(t * 1.1) * 3;
+      P.tilt = Math.sin(t * 1.1 + 0.6) * 5;
+      P.breath = 0.6;
+      P.tailAmp = 0.3;
+      P.blink = false;
+      const n = Math.floor(t / 1.4);
+      if (t > 0.8) c.once('ear' + n, () => c.impulse({ type: 'earFlick', side: n % 2 ? 'l' : 'r', s: 0.45 }));
+    },
+  },
+
+  catchDrops: {
+    caption: 'catchDrops',
+    pose(t, P, c) {
+      P.gaze = c.away(10, -420);
+      P.headFollow = 0.6;
+      if (t < 3) {
+        P.pitch = -0.5;
+        P.mouthOpen = 0.55;
+        P.tongue = 0.75 + 0.2 * Math.sin(t * 5);
+        P.shutL = P.shutR = 1;
+        P.shutStyle = 'squeeze';
+        P.earPerk = -0.2;
+        P.blink = false;
+      } else {
+        P.mouthOpen = Math.max(0, Math.sin(t * 16)) * 0.12;
+        P.smile = 0.7;
+        P.shutL = P.shutR = 1;
+        P.shutStyle = 'happy';
+      }
+    },
+  },
+
+  catchFlake: {
+    caption: 'catchFlake',
+    pose(t, P, c) {
+      const n = c.body().nose;
+      if (t < 1.9) {
+        // one flake, all the way down
+        const u = t / 1.9;
+        P.gaze = { x: n.x + Math.sin(t * 3) * 40 * (1 - u), y: n.y - 300 * (1 - u) };
+        P.headFollow = 0.5;
+        P.pitch = -0.3 * (1 - u);
+        P.eyeOpen = 1.12;
+        P.pupil = 1.3;
+        P.mouthOpen = 0.3 + 0.3 * u;
+        P.tongue = 0.9 * u;
+        P.earPerk = 0.7;
+      } else if (t < 2.3) {
+        P.gaze = { x: n.x, y: n.y + 6 };
+        P.shutL = P.shutR = 1;
+        P.shutStyle = 'squeeze';
+        P.mouthOpen = 0;
+        c.once('chomp', () => c.impulse({ type: 'flinch', s: 0.25 }));
+      } else {
+        // cold!
+        P.lean = Math.sin(t * 34) * 1.6 * (1 - smoothstep(2.3, 3.4, t));
+        P.smile = 0.9;
+        P.eyeOpen = 1.1;
+        P.sparkle = 0.5;
+        P.blush = 0.4;
+        P.tailAmp = 0.6;
+      }
+    },
+  },
+
+  snowAwe: {
+    caption: 'snowAwe',
+    pose(t, P, c) {
+      P.gaze = c.away(Math.sin(t * 0.8) * 200, -360);
+      P.headFollow = 0.9;
+      P.pitch = -0.15;
+      P.sparkle = 0.6;
+      P.mouthOpen = 0.14;
+      P.earPerk = 0.5;
+      P.tailAmp = 0.3;
+    },
+  },
+
+  // a pebble that may have moved: sniff it, poke it, wait… and shrug
+  inspectPebble: {
+    caption: 'tsubuInspect',
+    pose(t, P, c) {
+      P.posture = 'stand';
+      P.gaze = c.target;
+      P.headFollow = 1;
+      P.bodyFollow = 0.4;
+      P.earPerk = 0.8;
+      if (t < 2) {
+        P.crouch = 0.35;
+        P.pitch = 0.4;
+        P.reachY = 10;
+        P.pupil = 1.35;
+        P.mouthOpen = Math.max(0, Math.sin(t * 24)) * 0.05;
+      } else if (t < 2.7) {
+        P.crouch = 0.3;
+        P.armL = { ...c.target, space: 'world' };
+        if (t > 2.25) c.once('poke', () => c.emit('tsubuPoke', c.pebble));
+      } else if (t < 4) {
+        // …nothing. It's a pebble.
+        P.crouch = 0.3;
+        P.eyeOpen = 1.14;
+        P.pupil = 1.4;
+        P.blink = false;
+        P.tilt = 10 * smoothstep(3.2, 3.8, t);
+      } else {
+        P.gaze = null;
+        P.headFollow = 0;
+        P.tilt = 12;
+        P.browL = 0.7;
+        P.browR = 0.1;
+        P.armL = { x: -74, y: -66, space: 'body' };
+        if (!P.umbrella) P.armR = { x: 74, y: -66, space: 'body' };
+        P.mouthOpen = 0.08;
+      }
+    },
+  },
+
+  // pat, pat, pat: a little fox made of snow
+  buildSnow: {
+    caption: 'snowfoxBuild',
+    pose(t, P, c) {
+      P.posture = 'stand';
+      P.gaze = c.target;
+      P.headFollow = 0.95;
+      if (t < 5.8) {
+        const k = Math.sin(t * 9);
+        P.crouch = 0.4;
+        P.reachY = 8;
+        P.pitch = 0.3;
+        P.tongue = 0.35;   // concentrating
+        P.mouthOpen = 0.08;
+        P.browTiltL = P.browTiltR = -0.2;
+        P.armL = { x: c.target.x - 16, y: c.target.y + 10 - Math.max(0, k) * 22 - t * 4, space: 'world' };
+        if (!P.umbrella) P.armR = { x: c.target.x + 16, y: c.target.y + 10 - Math.max(0, -k) * 22 - t * 4, space: 'world' };
+        for (const [i, at] of [[1, 1.3], [2, 3], [3, 4.8]]) if (t > at) c.once('grow' + i, () => { c.emit('snowfox', i / 3); c.emit('sfx', 'tok'); });
+      } else {
+        P.smile = 0.95;
+        P.sparkle = 0.8;
+        P.blush = 0.45;
+        P.tilt = 8;
+        P.tailAmp = 0.8;
+        P.tailSpeed = 2.2;
+        P.armL = { x: -52, y: -40, space: 'body' };
+      }
+    },
+  },
+});
+
 /** Places Kon visits on its own, how much it likes them, and what it does there. */
 export const ACTIVITIES = [
   { id: 'home', weight: 0.8, act: null, dur: [8, 14] },

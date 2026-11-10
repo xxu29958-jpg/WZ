@@ -85,7 +85,7 @@ export class Play {
     if (this.arg.firefly) {
       // a firefly landed on Kon's nose: no flinch, just a long cross-eyed stare… and then
       this.arg.sneeze = true;
-      this.say('fireflyNose', true);
+      this.say(this.arg.butterfly ? 'butterflyNose' : 'fireflyNose', true);
       return;
     }
     this.impulse({ type: 'flinch', s: 0.8 });

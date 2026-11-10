@@ -225,6 +225,7 @@ export class GardenVista {
         B.el.setAttribute('transform', `translate(${f2(B.x)} ${f2(B.y)}) scale(${B.dir} 1)`);
       }
     }
+    this.updateNightValley(dt);
     // birds: by day, every minute or two, a loose V heading across (toward home at dusk)
     const p = this.sky.p;
     if (this.flock) {
@@ -238,6 +239,51 @@ export class GardenVista {
         this.nextFlockAt = this.t + 70 + this.rng() * 80;
         if (this.autoGusts) this.spawnFlock();
       }
+    }
+  }
+
+  /** After dark, sometimes: paper lanterns set adrift from the village, crossing the lake in a slow line. */
+  startToro() {
+    const n = 6 + Math.floor(this.rng() * 4);
+    this.toro = [];
+    for (let i = 0; i < n; i++) {
+      this.toro.push({ x: 552 - i * (20 + this.rng() * 16), y: 424 + this.rng() * 34 + (i % 2) * 8, seed: this.rng() * 10, v: 4.6 + this.rng() * 1.4 });
+    }
+  }
+
+  /** Something is watching from the dark of the trees. (It blinks. It means no harm.) */
+  startEyes() {
+    const b = this.baseVb;
+    const spots = [[1180, 590], [1260, 566], [404, 596], [470, 622], [1420, 560], [300, 560]].filter(([x]) => x > b.x + 50 && x < b.x + b.w - 50);
+    if (!spots.length) return;
+    const [x, y] = spots[Math.floor(this.rng() * spots.length) % spots.length];
+    this.eyes = { x, y, t: 0, dur: 5.5 + this.rng() * 2 };
+    const q = this.farToScreen(x, y, 0.4);
+    const at = this.toWorldLocal(q.x, q.y);
+    this.emit({ type: 'notice', x: at.x, y: at.y });
+  }
+
+  updateNightValley(dt) {
+    const dark = this.sky.p.stars > 0.7 && !this.sky.lapsing;
+    if (this.toro) {
+      for (const L of this.toro) L.x += L.v * dt;
+      if (this.toro.every((L) => L.x > 1090) || this.sky.p.stars < 0.3) this.toro = null;
+    } else if (dark && this.autoMeteors && !this.reduced) {
+      if (this.nextToroAt === undefined) this.nextToroAt = this.t + 24 + this.rng() * 30;
+      if (this.t > this.nextToroAt) { this.nextToroAt = this.t + 150 + this.rng() * 120; this.startToro(); }
+    }
+    const E = this.eyes;
+    if (E) {
+      E.t += dt;
+      // a cursor coming close: they shut at once
+      if (this.pointerScreen && !E.shy) {
+        const q = this.farToScreen(E.x, E.y, 0.4);
+        if (Math.hypot(this.pointerScreen.x - q.x, this.pointerScreen.y - q.y) < 70) { E.shy = true; E.t = Math.max(E.t, E.dur - 0.25); }
+      }
+      if (E.t > E.dur) this.eyes = null;
+    } else if (dark && this.autoMeteors && !this.reduced) {
+      if (this.nextEyesAt === undefined) this.nextEyesAt = this.t + 40 + this.rng() * 40;
+      if (this.t > this.nextEyesAt) { this.nextEyesAt = this.t + 80 + this.rng() * 90; this.startEyes(); }
     }
   }
 
@@ -327,15 +373,18 @@ export class GardenVista {
     // the terrace wall below the border (only seen while the camera comes down on arrival)
     svgEl('rect', { x: X0, y: 700, width: X1 - X0, height: 160, class: 'terrace-wall' }, host);
     // the stone border the sand meets
-    let st = '', moss = '';
+    let st = '', moss = '', caps = '';
     for (let x = X0; x < X1;) {
       const w = 34 + rng() * 46, h = 12 + rng() * 9;
       const y = 703;
       st += `M ${f2(x + 3)},${f2(y)} C ${f2(x)},${f2(y - h * 0.9)} ${f2(x + w * 0.2)},${f2(y - h * 1.05)} ${f2(x + w * 0.5)},${f2(y - h * 1.05)} C ${f2(x + w * 0.85)},${f2(y - h * 1.05)} ${f2(x + w)},${f2(y - h * 0.8)} ${f2(x + w - 3)},${f2(y)} Z `;
       if (rng() < 0.45) moss += `M ${f2(x + w * 0.2)},${f2(y - h * 0.9)} Q ${f2(x + w * 0.5)},${f2(y - h * 1.2)} ${f2(x + w * 0.78)},${f2(y - h * 0.88)} Q ${f2(x + w * 0.5)},${f2(y - h * 0.7)} ${f2(x + w * 0.2)},${f2(y - h * 0.9)} Z `;
+      // (and when it snows, every stone gets a cap)
+      caps += `M ${f2(x + w * 0.1)},${f2(y - h * 0.72)} C ${f2(x + w * 0.2)},${f2(y - h * 1.28)} ${f2(x + w * 0.8)},${f2(y - h * 1.28)} ${f2(x + w * 0.9)},${f2(y - h * 0.72)} Q ${f2(x + w * 0.5)},${f2(y - h * 0.95)} ${f2(x + w * 0.1)},${f2(y - h * 0.72)} Z `;
       x += w - 2;
     }
     svgEl('path', { d: st, class: 'terrace-stone' }, host);
     svgEl('path', { d: moss, class: 'c-moss' }, host);
+    svgEl('path', { d: caps, class: 'snow-cap' }, host);
   }
 }

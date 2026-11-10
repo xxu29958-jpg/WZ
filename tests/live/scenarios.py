@@ -409,6 +409,104 @@ def layout_at_sizes(p):
     return not bad, "; ".join(rows)
 
 
+def weather_live(p):
+    """Rain for real: the leaf comes out, a puddle gets jumped in, a real click squeezes a cloud and splashes a puddle."""
+    p.load("motion=full&hour=14", wait=1.5)
+    p.ff.pointer_path([(20, p.h - 20)], 0)
+    p.js("const z = window.__zen; z.brain.zenArmed = false; z.scene.setWeather('rain', { dur: 600, instant: true });")
+    umbrella = p.wait_for("window.__zen.brain.out.umbrella", 8)
+    p.js("window.__zen.brain.startLife('puddle')")
+    jumped = p.wait_for("window.__zen.brain.state === 'POUNCE' && window.__zen.brain.arg.phase === 'land'", 14)
+    time.sleep(0.5)
+    p.shot("rain-puddle")
+    probs = []
+    p.check_layout("in the puddle", probs)
+    p.wait_for("window.__zen.brain.state === 'IDLE'", 8)
+    # a click in another puddle: a splash
+    before = p.js("return window.__zen.scene.wx.spray.length")
+    sx, sy = p.screen(250, 906)
+    p.ff.pointer_path([(sx, sy)], 0, press=True)
+    time.sleep(0.15)
+    splashed = p.js("return window.__zen.scene.wx.spray.length") > before
+    # squeeze a cloud: it lets go of a shower of its own
+    pos = p.js("""
+      const s = window.__zen.scene, c = s.clouds.find((k) => k.shown > 0.9);
+      c.x = s.baseVb.x + s.baseVb.w * 0.36; c.v = 0.85;
+      return new Promise((res) => setTimeout(() => { const q = s.farToScreen(c.x, c.y - c.h * c.s * s.cloudGrow * 0.4, 0.26); res([q.x, q.y]); }, 200));
+    """)
+    p.ff.pointer_path([(pos[0], pos[1])], 0, press=True)
+    time.sleep(0.2)
+    squeezed = p.js("return window.__zen.scene.wx.sprinkles.length") > 0
+    # and when it stops: a rainbow
+    p.js("const z = window.__zen; z.scene.setWeather('clear'); z.scene.weather.rain = 0;")
+    bow = p.wait_for("window.__zen.scene.weather.bow > 0.5", 12)
+    p.shot("rainbow")
+    ok = umbrella and jumped and splashed and squeezed and bow and not probs
+    return ok, f"leaf umbrella={umbrella} puddle jump={jumped} click splashed={splashed} cloud squeezed={squeezed} rainbow={bow}; layout={probs or 'ok'}"
+
+
+def ball_and_pebbles(p):
+    """A real click kicks the ball and Kon gives chase; the pebble spirits move only while the real mouse is still."""
+    p.load("motion=full&hour=11", wait=1.5)
+    p.js("const z = window.__zen; z.brain.zenArmed = false; z.brain.life.lastVisit.tsubu = 1e9;")
+    c = p.js("const b = window.__zen.ball.center(); return [b.x, b.y]")
+    sx, sy = p.screen(c[0] + 6, c[1])
+    p.ff.pointer_path([(sx + 200, sy - 100), (sx, sy)], 300)
+    p.ff.pointer_path([(sx, sy)], 0, press=True)
+    kicked = p.wait_for("window.__zen.ball.kickedBy === 'user'", 1)
+    chased = p.wait_for("(() => { const a = window.__zen.brain.life.act; return a && a.id === 'ball'; })()", 3)
+    batted = p.wait_for("window.__zen.ball.kickedBy === 'kon'", 12)
+    p.shot("ball")
+    # now the spirits: out they come; the mouse is parked, so they are free
+    p.wait_for("window.__zen.brain.state === 'IDLE' && !window.__zen.brain.life.act", 8)
+    p.js("const z = window.__zen; z.spirits.outing('parade', z.spirits.ctx, { x: 868, y: 922 });")
+    time.sleep(6.5)
+    snap = "return window.__zen.spirits.list.map((s) => [s.x, s.y])"
+    a = p.js(snap)
+    time.sleep(2.5)
+    b = p.js(snap)
+    free = max(abs(a[i][0] - b[i][0]) + abs(a[i][1] - b[i][1]) for i in range(5))
+    p.shot("pebbles-free")
+    # wiggle the real mouse somewhere else on the page: stones, all of them
+    p.ff.pointer_path([(200 + (i % 2) * 40, 200) for i in range(30)], 3000)
+    b = p.js(snap)
+    p.ff.pointer_path([(200 + (i % 2) * 40, 210) for i in range(20)], 2000)
+    c2 = p.js(snap)
+    watched = max(abs(c2[i][0] - b[i][0]) + abs(c2[i][1] - b[i][1]) for i in range(5))
+    stones = p.js("return window.__zen.spirits.out.every((s) => s.stone > 0.9)")
+    p.shot("pebbles-stone")
+    # hover right on one, wiggling: it can't bear it
+    at = p.js("const s = window.__zen.spirits.out[0]; return [s.x, s.y - 12]")
+    hx, hy = p.screen(at[0], at[1])
+    p.ff.pointer_path([(hx + (i % 2) * 5, hy) for i in range(24)], 1800)
+    popped = p.js("return window.__zen.spirits.out.length") < 5
+    ok = kicked and chased and batted and free > 15 and watched < 0.5 and stones and popped
+    return ok, f"click kicked the ball={kicked} Kon chased={chased} batted it={batted}; pebbles moved {free:.0f} unwatched, {watched:.1f} watched (stones={stones}); hovering sent one under={popped}"
+
+
+def residents_touch(p):
+    """On a phone: tap the ball, tap a pebble."""
+    p.load("motion=full&hour=11", wait=1.5)
+    p.js("const z = window.__zen; z.brain.zenArmed = false; z.brain.life.lastVisit.tsubu = 1e9; z.ball.x = 800; z.ball.y = 930;")
+    time.sleep(0.2)
+    c = p.js("const b = window.__zen.ball.center(); return [b.x, b.y]")
+    sx, sy = p.screen(c[0], c[1])
+    p.ff.tap(sx, sy)
+    kicked = p.wait_for("window.__zen.ball.kickedBy === 'user'", 1)
+    chased = p.wait_for("(() => { const a = window.__zen.brain.life.act; return a && a.id === 'ball'; })()", 3)
+    p.wait_for("window.__zen.brain.state === 'IDLE' && !window.__zen.brain.life.act", 14)
+    p.js("const z = window.__zen; z.spirits.outing('tower', z.spirits.ctx, { x: 800, y: 940 });")
+    tower = p.wait_for("window.__zen.spirits.troupe.phase === 'hold'", 25)
+    p.shot("pebbles-phone")
+    probs = []
+    p.check_layout("pebble tower on a phone", probs)
+    at = p.js("const s = window.__zen.spirits.list.find((k) => k.stack === 4) || window.__zen.spirits.out[0]; const sc = s.size * 1.3; return [s.x, s.y - (9 + s.h) * sc]")
+    tx, ty = p.screen(at[0], at[1])
+    p.ff.tap(tx, ty)
+    popped = p.wait_for("window.__zen.spirits.out.length < 5", 1)
+    return kicked and chased and tower and popped and not probs, f"tap kicked the ball={kicked} Kon chased={chased}; tower built={tower}; tap sent one under={popped}; layout={probs or 'ok'}"
+
+
 SCENARIOS = {
     "watch": (watch_stop_resume, "1440x900"),
     "startle": (rush_startle, "1440x900"),
@@ -423,6 +521,9 @@ SCENARIOS = {
     "sizes": (layout_at_sizes, "1600x1200"),
     "night-sky": (night_sky, "1440x900"),
     "night-sky-touch": (night_sky_touch, "390x844"),
+    "weather": (weather_live, "1440x900"),
+    "residents": (ball_and_pebbles, "1440x900"),
+    "residents-touch": (residents_touch, "390x844"),
 }
 
 
