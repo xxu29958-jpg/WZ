@@ -14,13 +14,20 @@ import { Sky } from './sky.js';
 import { Light } from './light.js';
 import { GardenWind } from './wind.js';
 import { GardenNight } from './night.js';
+import { GardenVista } from './vista.js';
 
 export { PLACES };
+
+// How deep each layer is (0: as far as the sky, 1: the ground Kon stands on, more: nearer than that).
+// The camera's pan, the pointer's parallax, the tilt and the breathing drift all scale with it.
+const DEPTH = { hills: 0.22, stars: 0.22, kasumi: 0.32, valley: 0.4 };
+const LOOK = { x: 26, y: 14 };     // how far (px) the pointer's parallax shifts the sky
+const OVERSCAN = 120;              // extra sky above and below the screen, for the tilt
 
 export class Scene {
   toWorld = (cx, cy) => {
     const r = this.app.getBoundingClientRect();
-    return { x: this.vb.x + (cx - r.left) / this.scale, y: this.vb.y + (cy - r.top) / this.scale };
+    return this.toWorldLocal(cx - r.left, cy - r.top);
   };
   inputSpan = () => {
     const r = (this._inputRect && this._inputRectAt > this.t - 0.5) ? this._inputRect : this.measureInput();
@@ -83,6 +90,9 @@ export class Scene {
     this.konSitting = false;
     this.konStill = false;
     this.buildSky();
+    this.buildValley();
+    this.buildTerrace();
+    this.buildNear();
     this.buildKasumi();
     this.buildStars();
     this.light = new Light({ shade: $('shade'), sun: $('sunlight'), scene: this, reduced: reducedMotion });
@@ -103,11 +113,21 @@ export class Scene {
     this.konEl = $('kon');
     this.visitor = null;
     this.konAt = { x: 800, y: 826, seat: 'cushion' };
-    // camera: pans to follow Kon; far layers drift less (parallax)
+    // camera: pans to follow Kon; far layers drift less (parallax). The pointer adds a
+    // little more parallax (look), the camera can tilt up toward the sky and push in on a moment.
     this.camX = 0;
     this.camV = 0;
+    this.look = { x: 0, y: 0 };
+    this.lookT = { x: 0, y: 0 };
+    this.tilt = 0;
+    this.tiltV = 0;
+    this.zoom = 1;
+    this.zoomV = 0;
+    this.zoomO = { x: 0, y: 0 };
+    this.camFocus = null;
+    this.stage = $('stage');
     this.worldLayers = $('world-layers');
-    this.farLayers = { hills: $('layer-hills'), kasumi: $('layer-kasumi'), trees: $('layer-trees'), wall: $('layer-wall'), stars: $('layer-stars') };
+    this.farLayers = { hills: $('layer-hills'), valley: $('layer-valley'), kasumi: $('layer-kasumi'), stars: $('layer-stars') };
     this.layers = [this.back, this.svg, this.glow, ...Object.values(this.farLayers)];
     this.appliedCamX = null;
     this.captionW = 300;
@@ -185,6 +205,13 @@ export class Scene {
         el.style.left = `${-mpx}px`;
         el.style.width = `${this.W + 2 * mpx}px`;
       }
+      // the sky reaches above and below the screen, so the camera can tilt and look around
+      const O = OVERSCAN, OW = O / S;
+      for (const el of [this.farLayers.hills, this.farLayers.stars]) {
+        el.setAttribute('viewBox', `${(b.x - M).toFixed(4)} ${f2(b.y - OW)} ${(b.w + 2 * M).toFixed(4)} ${f2(b.h + 2 * OW)}`);
+        el.style.top = `${-O}px`;
+        el.style.height = `${this.H + 2 * O}px`;
+      }
       // canvases inside the moving world layer sit at their base (camera 0) positions
       const e = this.baseToScreen(530, 330);
       const enso = $('enso');
@@ -192,21 +219,103 @@ export class Scene {
       this.zen.layout();
       this.rake.place();
       this.placeMaple();
+      this.placeNear();
       this.viewDirty = false;
     }
-    // the camera: composited transforms only — far layers drift less (parallax)
-    const px = -this.camX * S;
-    const slide = (k) => `translate3d(${f2(px * k)}px, 0, 0)`;
-    this.worldLayers.style.transform = slide(1);
-    this.glow.style.transform = slide(1);
-    this.farLayers.hills.style.transform = slide(0.22);
-    this.farLayers.stars.style.transform = slide(0.22);
-    this.farLayers.trees.style.transform = slide(0.5);
-    this.farLayers.wall.style.transform = slide(0.85);
-    this.placeKasumi();
+    this.applyCamera();
     PLACES.maple = this.mapleToWorld(1220, 150);
     this.positionOverlays();
+  }
+
+  /** How a layer at depth k is shifted by the pointer's parallax and the tilt (px, before the zoom). */
+  shiftAt(k) {
+    const tf = k <= 1 ? 0.12 + 0.88 * k : 1 + (k - 1) * 0.5;
+    return { x: this.look.x * (1 - k) * LOOK.x, y: this.tilt * tf + this.look.y * (1 - k) * LOOK.y };
+  }
+
+  /** Every layer's composited transform, and the zoom (cheap; no redraws). Every frame. */
+  applyCamera() {
+    if (!this.baseVb) return;
+    const S = this.scale;
+    const px = -this.camX * S;
+    // (whole pixels, written only when they change: a layer nudged by a fraction of a pixel
+    // every frame costs a lot to composite where there's no GPU, and nobody can see it)
+    const place = (el, x, y, extra = '') => {
+      const v = `translate3d(${Math.round(x)}px, ${Math.round(y)}px, 0)${extra}`;
+      if (el._t !== v) { el._t = v; el.style.transform = v; }
+    };
+    const at = (el, k, extraX = 0) => {
+      const d = this.shiftAt(k);
+      place(el, px * k + d.x + extraX, d.y);
+    };
+    // the ground itself follows the camera smoothly (Kon walks on it)
+    const w = `translate3d(${f2(px)}px, ${f2(this.tilt)}px, 0)`;
+    if (this.worldLayers._t !== w) { this.worldLayers._t = w; this.worldLayers.style.transform = w; this.glow.style.transform = w; }
+    for (const [name, el] of Object.entries(this.farLayers)) {
+      if (name !== 'kasumi') at(el, DEPTH[name]);
+    }
+    // the mist bands also drift back and forth on their own
+    const drift = this.reduced ? 0 : (Math.sin(this.t * 0.045) * 60 + Math.sin(this.t * 0.118 + 1) * 14) * S;
+    at(this.farLayers.kasumi, DEPTH.kasumi, drift);
+    // the maple is nearer than the ground: it moves the other way, and sways
+    const m = this.shiftAt(1.3);
+    place($('layer-maple'), m.x, m.y, ` rotate(${(this.mapleSwayDeg || 0).toFixed(2)}deg)`);
+    // the out-of-focus corners are nearer still
+    const n = this.shiftAt(1.5);
+    place($('near-l'), px * 0.3 + n.x, n.y);
+    place($('near-r'), px * 0.3 + n.x, n.y);
+    const z = this.zoom;
+    const zt = z > 1.0005 ? `scale(${z.toFixed(4)})` : '';
+    const zo = zt ? `${f2(this.zoomO.x)}px ${f2(this.zoomO.y)}px` : '';
+    if (this.stage._t !== zt + zo) {
+      this.stage._t = zt + zo;
+      if (zt) this.stage.style.transformOrigin = zo;
+      this.stage.style.transform = zt;
+    }
+    // things pinned to the garden follow it
+    if (this.mode === 'wide' && this.emaPos) {
+      const a = this.toScreen(1300, 646);
+      this.emaPos.x = a.x;
+      this.emaPos.y = a.y + 12 * (this.emaUi || 1);
+    }
     this.zen.placeSeal();
+  }
+
+  /** The camera, every frame: pointer parallax, breathing, tilt and push-in, all springy. */
+  updateCamera(dt) {
+    const calm = this.reduced;
+    // look: toward the pointer, plus a slow breath so the world is never quite still
+    const k = 1 - Math.exp(-dt * 2.2);
+    const bx = calm ? 0 : Math.sin(this.t * 0.11) * 0.16 + Math.sin(this.t * 0.043 + 1) * 0.1;
+    const by = calm ? 0 : Math.sin(this.t * 0.07 + 2) * 0.12;
+    this.look.x += ((calm ? 0 : this.lookT.x) + bx - this.look.x) * k;
+    this.look.y += ((calm ? 0 : this.lookT.y) + by - this.look.y) * k;
+    // tilt: look up at the sky while the lantern turns day to night (and in the arrival)
+    const tiltT = calm ? 0 : (this.sky.lapsing ? 70 : 0) * (this.mode === 'wide' ? 1 : 0.35);
+    const wt = 2 * Math.PI * (this.tilt > tiltT + 40 ? 0.22 : 0.35);
+    this.tiltV += (wt * wt * (tiltT - this.tilt) - 2 * wt * this.tiltV) * dt;
+    this.tilt += this.tiltV * dt;
+    if (calm) { this.tilt = 0; this.tiltV = 0; }
+    // push in on a moment (main.js says where), and back out
+    const f = calm ? null : this.camFocus;
+    const zT = f ? f.z : 1;
+    const wz = 2 * Math.PI * 0.42;
+    this.zoomV += (wz * wz * (zT - this.zoom) - 2 * wz * this.zoomV) * dt;
+    this.zoom = Math.max(1, this.zoom + this.zoomV * dt);
+    if (f) {
+      const o = this.toStage(f.x, f.y);
+      const ko = 1 - Math.exp(-dt * 3);
+      this.zoomO.x += (o.x - this.zoomO.x) * ko;
+      this.zoomO.y += (o.y - this.zoomO.y) * ko;
+    }
+    this.applyCamera();
+  }
+
+  /** Arrival: the camera starts looking up at the sky and comes down to the garden. */
+  startIntro() {
+    if (this.reduced) return;
+    this.tilt = (this.H || 800) * (this.mode === 'wide' ? 0.3 : 0.18);
+    this.tiltV = 0;
   }
 
   /**
@@ -287,16 +396,27 @@ export class Scene {
     return out;
   }
 
-  /** World → screen for a far layer that drifts `k` times as fast as the camera (parallax). */
-  farToScreen(x, y, k) {
-    return { x: (x - this.baseVb.x - this.camX * k) * this.scale, y: (y - this.baseVb.y) * this.scale };
+  /**
+   * Coordinates. The *stage* is the garden as drawn, before the camera's zoom; the
+   * *screen* is after it (what HTML overlays and the pointer use).
+   */
+  zoomed(p) {
+    const z = this.zoom, o = this.zoomO;
+    return z === 1 ? p : { x: o.x + (p.x - o.x) * z, y: o.y + (p.y - o.y) * z };
   }
 
-  /** The mist bands: parallax, plus a slow drift back and forth of their own. */
-  placeKasumi() {
-    const drift = this.reduced ? 0 : Math.sin(this.t * 0.045) * 60 + Math.sin(this.t * 0.118 + 1) * 14;
-    this.farLayers.kasumi.style.transform = `translate3d(${f2((-this.camX * 0.32 + drift) * this.scale)}px, 0, 0)`;
+  /** World (the ground plane) → stage. */
+  toStage(x, y) {
+    return { x: (x - this.vb.x) * this.scale, y: (y - this.vb.y) * this.scale + this.tilt };
   }
+
+  /** A far layer's world point (it drifts `k` times as fast as the camera) → stage. */
+  farToStage(x, y, k) {
+    const d = this.shiftAt(k);
+    return { x: (x - this.baseVb.x - this.camX * k) * this.scale + d.x, y: (y - this.baseVb.y) * this.scale + d.y };
+  }
+
+  farToScreen(x, y, k) { return this.zoomed(this.farToStage(x, y, k)); }
 
   /** World → screen for things inside the moving world layer (as if the camera were at 0). */
   baseToScreen(x, y) {
@@ -348,7 +468,7 @@ export class Scene {
   }
 
   toScreen(x, y) {
-    return { x: (x - this.vb.x) * this.scale, y: (y - this.vb.y) * this.scale };
+    return this.zoomed(this.toStage(x, y));
   }
 
   positionOverlays() {
@@ -358,6 +478,7 @@ export class Scene {
     let ui;
     if (this.mode === 'wide') {
       ui = clamp((190 * s) / 250, 0.72, 1.3);
+      this.emaUi = ui;
       ema.style.setProperty('--ui-scale', ui.toFixed(3));
       const a = this.toScreen(1300, 646);
       this.emaPos = { x: a.x, y: a.y + 12 * ui, cord: true };
@@ -398,8 +519,11 @@ export class Scene {
     return this._inputRect;
   }
 
+  /** Screen (px, relative to the garden's box) → world. */
   toWorldLocal(px, py) {
-    return { x: this.vb.x + px / this.scale, y: this.vb.y + py / this.scale };
+    const z = this.zoom, o = this.zoomO;
+    const sx = o.x + (px - o.x) / z, sy = o.y + (py - o.y) / z;
+    return { x: this.vb.x + sx / this.scale, y: this.vb.y + (sy - this.tilt) / this.scale };
   }
 
   /** Kon's sand doodle "while you were away" — placed in open sand in front of the cushion. */
@@ -450,16 +574,17 @@ export class Scene {
       this.camV += (w * w * (target - this.camX) - 2 * w * this.camV) * dt;
       this.camX += this.camV * dt;
       if (this.appliedCamX === null || Math.abs(this.camX - this.appliedCamX) > 0.03) this.applyView();
-      else this.placeCaption();
+      this.updateCamera(dt);
+      this.placeCaption();
     }
     this.updateWind(dt);
     this.updateNight(dt);
+    this.updateValley(dt);
     this.updateProps(dt);
-    this.placeKasumi();
     this.light.update(dt, this.sky.p, {
       kon: this.konAt, fireflies: this.fireflies, sway: this.mapleSwayDeg, lampFlicker: this.lampFlicker, wind: this.wind,
     });
   }
 }
 
-mixin(Scene, GardenArt, GardenProps, GardenWind, GardenNight);
+mixin(Scene, GardenArt, GardenProps, GardenWind, GardenNight, GardenVista);

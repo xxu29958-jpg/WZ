@@ -15,7 +15,8 @@
 <body>
 <div id="app">
 
-  <!-- far layer: sky, trees, wall and raked sand (static) -->
+  <!-- the stage: every layer of the garden (the camera zooms it as one) -->
+  <div id="stage">
   <!-- far scenery: three layers that drift at their own speed as the camera pans (parallax) -->
   <svg id="layer-hills" class="far-layer" viewBox="0 0 1600 1000" aria-hidden="true">
     <defs>
@@ -57,53 +58,29 @@
       <!-- distant hills in layers of haze, a pagoda, and mist (generated) -->
       <g id="sky" aria-hidden="true"></g>
   </svg>
-  <!-- bands of mist that drift slowly across the hills -->
+  <!-- the valley below the terrace: a lake with a village, a path of torii gates, the forest (js/garden/vista.js) -->
+  <svg id="layer-valley" class="far-layer" viewBox="0 0 1600 1000" aria-hidden="true">
+    <defs>
+      <linearGradient id="lake-grad" gradientUnits="userSpaceOnUse" x1="0" y1="404" x2="0" y2="640">
+        <stop offset="0" class="lake-s0"/>
+        <stop offset="1" class="lake-s1"/>
+      </linearGradient>
+      <linearGradient id="unkai-grad" gradientUnits="userSpaceOnUse" x1="0" y1="420" x2="0" y2="640">
+        <stop offset="0" class="haze-stop"/>
+        <stop offset=".55" class="haze-stop"/>
+        <stop offset="1" class="unkai-deep"/>
+      </linearGradient>
+      <linearGradient id="valley-haze" gradientUnits="userSpaceOnUse" x1="0" y1="330" x2="0" y2="690">
+        <stop offset="0" class="haze-stop" stop-opacity=".5"/>
+        <stop offset=".3" class="haze-stop" stop-opacity=".3"/>
+        <stop offset="1" class="haze-stop" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <g id="valley"></g>
+  </svg>
+  <!-- bands of mist that drift slowly, and a sea of clouds in the valley at dawn -->
   <svg id="layer-kasumi" class="far-layer" viewBox="0 0 1600 1000" aria-hidden="true">
       <g id="kasumi"></g>
-  </svg>
-  <svg id="layer-trees" class="far-layer" viewBox="0 0 1600 1000" aria-hidden="true">
-      <!-- trees beyond the wall -->
-      <g id="trees" aria-hidden="true">
-        <path class="c-tree-far" d="M -1500,540 L -1500,470 C -1400,430 -1300,452 -1220,440 C -1120,410 -1040,446 -960,436 C -860,406 -780,440 -700,430 C -600,400 -520,442 -440,426 C -340,398 -260,436 -180,424 C -90,398 -10,430 70,420 C 150,392 230,428 300,416 C 380,390 450,424 520,418 C 610,396 690,430 760,424 C 850,398 930,428 1010,420 C 1100,394 1180,430 1260,418 C 1340,392 1420,426 1500,416 C 1590,394 1670,428 1760,420 C 1850,396 1930,430 2010,422 C 2110,398 2200,432 2290,424 C 2390,400 2480,430 2580,424 C 2680,404 2780,432 2880,428 C 2980,410 3060,430 3100,440 L 3100,540 Z"/>
-        <g class="c-tree-near">
-          <path d="M -40,540 C -60,500 -20,470 20,478 C 30,446 80,436 108,458 C 130,430 186,438 192,474 C 226,470 250,500 236,540 Z"/>
-          <path d="M 470,540 C 450,508 478,484 510,490 C 520,466 560,462 578,480 C 598,462 632,470 634,498 C 660,500 676,522 664,540 Z"/>
-          <path d="M 1120,540 C 1094,500 1130,468 1170,476 C 1180,444 1236,432 1266,456 C 1292,430 1350,440 1352,478 C 1392,474 1420,506 1404,540 Z"/>
-          <path d="M 1700,540 C 1680,506 1706,480 1740,486 C 1752,460 1796,456 1812,478 C 1836,460 1870,470 1868,500 C 1894,504 1906,526 1894,540 Z"/>
-        </g>
-      </g>
-
-  </svg>
-  <svg id="layer-wall" class="far-layer" viewBox="0 0 1600 1000" aria-hidden="true">
-    <defs>
-      <filter id="grain-wall" x="0" y="0" width="100%" height="100%" filterUnits="objectBoundingBox">
-      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="5" stitchTiles="stitch"/>
-      <feColorMatrix type="matrix" values="0 0 0 0 0.30  0 0 0 0 0.21  0 0 0 0 0.13  0 0 0 -2.2 1.32"/>
-    </filter>
-      <pattern id="roof-tiles" width="16" height="24" patternUnits="userSpaceOnUse">
-        <rect width="16" height="24" class="c-roof"/>
-        <path d="M 0.5,2 V 24" class="roof-seam"/>
-        <path d="M 2,4 Q 8,1 14,4" class="roof-hi"/>
-      </pattern>
-    </defs>
-      <!-- the old earthen wall, with its tiled cap -->
-      <g id="wall" aria-hidden="true">
-        <rect x="-1500" y="514" width="4600" height="186" class="c-wall"/>
-        <g class="wall-stains">
-          <path d="M -120,560 C -80,548 -20,566 10,600 C 30,630 -10,668 -60,652 C -110,640 -150,590 -120,560 Z"/>
-          <path d="M 210,600 C 260,586 330,604 350,640 C 362,668 300,690 250,676 C 200,664 180,620 210,600 Z"/>
-          <path d="M 620,540 C 680,530 720,552 712,580 C 704,606 650,612 618,596 C 590,582 590,548 620,540 Z"/>
-          <path d="M 980,590 C 1040,572 1120,590 1130,628 C 1140,664 1060,684 1010,670 C 960,656 940,606 980,590 Z"/>
-          <path d="M 1380,548 C 1430,540 1480,560 1478,592 C 1476,620 1420,630 1390,612 C 1360,596 1352,556 1380,548 Z"/>
-          <path d="M 1700,610 C 1760,596 1830,612 1836,646 C 1840,676 1770,690 1730,676 C 1690,662 1670,620 1700,610 Z"/>
-        </g>
-        <rect x="-1500" y="488" width="4600" height="28" fill="url(#roof-tiles)"/>
-        <rect x="-1500" y="484" width="4600" height="8" class="c-roof-ridge"/>
-        <rect x="-1500" y="516" width="4600" height="9" class="wall-eave-shadow"/>
-        <rect x="-1500" y="692" width="4600" height="10" class="c-curb"/>
-        <rect x="-1500" y="484" width="4600" height="218" fill="#000" filter="url(#grain-wall)" class="paper-grain"/>
-      </g>
-
   </svg>
 
   <!-- everything on the ground moves together with the camera -->
@@ -120,6 +97,8 @@
       <feColorMatrix type="matrix" values="0 0 0 0 0.30  0 0 0 0 0.21  0 0 0 0 0.13  0 0 0 -2.2 1.32"/>
     </filter>
     </defs>
+      <!-- the terrace's back edge: an old pine, round-pruned shrubs, a stone border (js/garden/vista.js) -->
+      <g id="terrace"></g>
       <!-- raked sand: base, generated rake lines and ripple rings -->
       <g id="sand" aria-hidden="true">
         <rect x="-1500" y="700" width="4600" height="1800" class="c-sand"/>
@@ -512,6 +491,10 @@
 
   </svg>
 
+  <!-- right in front of the lens, out of focus: pampas grass and maple leaves at the corners -->
+  <svg id="near-l" class="near" aria-hidden="true"><defs><filter id="dof" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="6"/></filter></defs><g id="near-left" filter="url(#dof)"></g></svg>
+  <svg id="near-r" class="near" aria-hidden="true"><g id="near-right" filter="url(#dof)"></g></svg>
+
   <!-- the light of the hour, multiplied over the garden (js/garden/light.js) -->
   <canvas id="shade" aria-hidden="true"></canvas>
   <!-- the night sky shines through: stars, the Milky Way and the moon, above the hills only -->
@@ -578,6 +561,9 @@
 
   <!-- shafts of sunlight and floating dust, screened over everything -->
   <canvas id="sunlight" aria-hidden="true"></canvas>
+  <!-- now and then a leaf tumbles right past the lens -->
+  <div id="lens-leaf" aria-hidden="true"></div>
+  </div>
 
   <!-- branding -->
   <header class="brand">

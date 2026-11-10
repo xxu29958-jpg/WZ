@@ -34,6 +34,10 @@ DEMOS = {
     "firefly": "?demo=firefly&hour=22.6&t=0.4",
     "leafhat": "?demo=leafhat&hour=14&t=1.2",
     "night-phone": "?demo=idle&hour=22.6|390x844",
+    "dawn": "?demo=idle&hour=6.4",
+    "arrival": "?demo=intro&hour=7.2&t=0.4",
+    "flock": "?demo=flock&hour=16&t=0.5",
+    "lens-leaf": "?demo=gust&hour=15&lens=1&t=1.1",
 }
 
 

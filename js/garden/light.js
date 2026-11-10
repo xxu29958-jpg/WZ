@@ -14,7 +14,7 @@
 // They are redrawn every other frame (soft light needs no more), and they are
 // tiny: a few gradients and sprites each.
 
-import { clamp, noise1, makeRng } from '../math.js';
+import { clamp, noise1, makeRng, smoothstep } from '../math.js';
 
 const SHADE_RES = 1 / 4;
 const SUN_RES = 1 / 2;
@@ -52,6 +52,7 @@ export class Light {
     this.fleckSprite = sprite([255, 238, 196], [[0, 1], [0.5, 0.85], [0.8, 0.3], [1, 0]]);
     this.clumpSprite = sprite([255, 255, 255], [[0, 1], [0.5, 0.7], [1, 0]]);
     this.flySprite = sprite([190, 230, 120], [[0, 1], [1, 0]]);
+    this.lampSprite = sprite([255, 196, 120], [[0, 1], [0.15, 0.85], [0.4, 0.25], [1, 0]]);
     // the maple's shadow on the sand: clumps of leaves, and flecks of sun between them
     const rng = makeRng(31);
     this.clumps = [];
@@ -109,7 +110,7 @@ export class Light {
     const k = SHADE_RES;
     const w = this.shade.width, h = this.shade.height;
     const S = sc.scale * k; // world units → shade pixels
-    const at = (x, y) => { const q = sc.toScreen(x, y); return [q.x * k, q.y * k]; };
+    const at = (x, y) => { const q = sc.toStage(x, y); return [q.x * k, q.y * k]; };
 
     // daylight is close to white: draw a see-through overlay instead of a multiply
     const minAmb = Math.min(...p.amb, ...p.ambSun);
@@ -124,7 +125,7 @@ export class Light {
     c.globalCompositeOperation = 'source-over';
     c.fillStyle = rgba(p.amb);
     c.fillRect(0, 0, w, h);
-    const src = sc.farToScreen(p.src.x, p.src.y, 0.22);
+    const src = sc.farToStage(p.src.x, p.src.y, 0.22);
     const sx = src.x * k, sy = Math.max(src.y, -this.H * 0.6) * k;
     const RS = Math.hypot(w, h) * 1.1;
     const g = c.createRadialGradient(sx, sy, 0, sx, sy, RS);
@@ -153,14 +154,33 @@ export class Light {
     if (p.lamp > 0.01) {
       const fl = ctx.lampFlicker ?? 1;
       const [lx, ly] = at(330, 590);
-      const R = 560 * S;
+      // its light reaches across the garden, but not down into the valley below the terrace
+      const R = 540 * S;
       const lg = c.createRadialGradient(lx, ly, 0, lx, ly, R);
       lg.addColorStop(0, rgba([255, 200, 125], 1 * p.lamp * fl));
       lg.addColorStop(0.22, rgba([240, 156, 84], 0.62 * p.lamp * fl));
       lg.addColorStop(0.6, rgba([190, 110, 60], 0.18 * p.lamp * fl));
       lg.addColorStop(1, rgba([160, 90, 50], 0));
+      const edge = at(0, 640)[1];
+      c.save();
+      c.beginPath();
+      c.rect(0, edge, w, h);
+      c.clip();
       c.fillStyle = lg;
       c.fillRect(lx - R, ly - R, R * 2, R * 2);
+      c.restore();
+      // (above that, just the glow around the lantern itself)
+      const R2 = 190 * S;
+      const lg2 = c.createRadialGradient(lx, ly, 0, lx, ly, R2);
+      lg2.addColorStop(0, rgba([255, 200, 125], 0.95 * p.lamp * fl));
+      lg2.addColorStop(1, rgba([200, 120, 60], 0));
+      c.save();
+      c.beginPath();
+      c.rect(0, 0, w, edge);
+      c.clip();
+      c.fillStyle = lg2;
+      c.fillRect(lx - R2, ly - R2, R2 * 2, R2 * 2);
+      c.restore();
       // and the pool it throws on the sand
       const [gx, gy] = at(330, 830);
       c.save();
@@ -285,19 +305,115 @@ export class Light {
 
   drawSun(dt, p, ctx) {
     const c = this.ux;
-    const show = p.rays > 0.01;
+    const night = clamp((p.stars - 0.1) / 0.5);
+    const show = p.rays > 0.01 || night > 0;
     if (show !== this.sunShown) {
       this.sunShown = show;
       this.sunCv.style.display = show ? '' : 'none';
     }
     if (!show) return;
     const w = this.sunCv.width, h = this.sunCv.height;
-    const k = SUN_RES;
     c.globalCompositeOperation = 'source-over';
     c.clearRect(0, 0, w, h);
     c.globalCompositeOperation = 'lighter';
+    if (this.scene.lakeOpen) this.drawValley(c, p, night);
+    if (p.rays > 0.01) this.drawShafts(c, dt, p, ctx, w, h);
+  }
+
+  /**
+   * Light down in the valley: the moon's (or the low sun's) glittering path across
+   * the lake, and after dark the village's windows and the lamps on the torii path.
+   */
+  drawValley(c, p, night) {
     const sc = this.scene;
-    const s = sc.farToScreen(p.sun.x, p.sun.y, 0.22);
+    const k = SUN_RES;
+    const t = this.t;
+    const S = sc.scale * k;
+    const V = 0.4; // the valley's parallax
+    const at = (x, y) => { const q = sc.farToStage(x, y, V); return [q.x * k, q.y * k]; };
+    const toValleyX = (sx) => (sx / k - sc.shiftAt(V).x) / sc.scale + sc.baseVb.x + sc.camX * V;
+    const shore = sc.lakeShore;
+    // a path of light on the water, under the moon or a low sun
+    const path = (src, color, a) => {
+      const sx = sc.farToStage(src.x, src.y, 0.22).x * k;
+      const vx = toValleyX(sx);
+      const bottom = Math.min(sc.lakeOpen(vx), shore + 210);
+      if (bottom < shore + 8) return;
+      const y0 = at(0, shore + 3)[1], y1 = at(0, bottom)[1];
+      // many small glints, thicker toward the middle of the path, breaking up as they come closer
+      const N = 64;
+      for (let i = 0; i < N; i++) {
+        const u = ((i * 0.618034) % 1);
+        const y = y0 + Math.pow(u, 1.25) * (y1 - y0);
+        const spread = (6 + 34 * u) * S;
+        const off = noise1(t * 0.35 + i * 3.7, i) * spread * 0.9;
+        const width = (2 + 14 * u) * S * (0.4 + 0.6 * Math.abs(noise1(t * 0.8 + i * 1.3, i + 2)));
+        const fl = Math.max(0, noise1(t * 2.1 + i * 2.1, i + 5));
+        const core = 1 - Math.min(1, Math.abs(off) / spread);
+        c.fillStyle = rgba(color, a * fl * (0.4 + 0.6 * core) * (1 - u * 0.5) * (1 - smoothstep(0.8, 1, u)));
+        c.fillRect(sx + off - width / 2, y, width, Math.max(0.8, 1.3 * S));
+      }
+    };
+    if (night > 0 && p.moon.up) path(p.moon, [255, 244, 214], 0.75 * night);
+    if (p.sun.up && p.sun.alt < 0.4 && p.rays > 0.2) path(p.sun, p.glow, 0.5 * p.rays * (1 - smoothstep(0.25, 0.4, p.sun.alt)));
+    // a flock of birds far off, wings beating, in a loose V
+    const F = sc.flock;
+    if (F) {
+      c.globalCompositeOperation = 'source-over';
+      c.strokeStyle = 'rgba(52,46,58,0.55)';
+      c.lineWidth = Math.max(1, 1.5 * S);
+      c.lineCap = 'round';
+      c.beginPath();
+      for (const b of F.birds) {
+        const q = sc.farToStage(F.x + b.dx, F.y + b.dy, 0.25);
+        const x = q.x * k, y = q.y * k;
+        const s = 4.2 * S;
+        const flap = Math.sin(t * 9 + b.ph);
+        c.moveTo(x - s, y - flap * s * 0.7);
+        c.quadraticCurveTo(x - s * 0.4, y - s * 0.4, x, y);
+        c.quadraticCurveTo(x + s * 0.4, y - s * 0.4, x + s, y - flap * s * 0.7);
+      }
+      c.stroke();
+      c.globalCompositeOperation = 'lighter';
+    }
+    if (night <= 0) return;
+    // the boat carries a lantern (unless it's behind Kon)
+    const B = sc.boat;
+    if (B && !(sc.konAt && Math.abs(sc.konAt.x - B.x) < 170)) {
+      const [x, y] = at(B.x + B.dir * 7, B.y - 5);
+      const r = 6 * S + 2;
+      c.globalAlpha = night * 0.95;
+      c.drawImage(this.lampSprite, x - r, y - r, r * 2, r * 2);
+      c.globalAlpha = 1;
+      c.fillStyle = rgba([255, 205, 130], 0.35 * night);
+      c.fillRect(x - 0.6, y + 6 * S, 1.2, 9 * S);
+    }
+    // windows in the village, and their reflections (someone goes to bed now and then)
+    const R = 7 * S + 2;
+    for (const v of sc.village || []) {
+      const on = v.on && noise1(t * 0.02 + v.seed * 7, v.seed) > -0.55;
+      if (!on) continue;
+      const [x, y] = at(v.x, v.y);
+      const fl = 0.8 + 0.2 * noise1(t * 3 + v.seed, v.seed);
+      c.globalAlpha = night * fl;
+      c.drawImage(this.lampSprite, x - R, y - R, R * 2, R * 2);
+      c.fillStyle = rgba([255, 205, 130], 0.4 * night * fl);
+      c.fillRect(x - 0.6, at(0, shore + 3)[1], 1.2, (6 + v.seed % 4) * S);
+    }
+    // lamps along the torii path (the ones not hidden behind the old pine)
+    for (const l of sc.toriiLamps || []) {
+      if (l.x < 340) continue;
+      const [x, y] = at(l.x, l.y);
+      c.globalAlpha = night * (0.75 + 0.25 * noise1(t * 2.5 + l.seed, l.seed));
+      c.drawImage(this.lampSprite, x - R * 0.8, y - R * 0.8, R * 1.6, R * 1.6);
+    }
+    c.globalAlpha = 1;
+  }
+
+  drawShafts(c, dt, p, ctx, w, h) {
+    const k = SUN_RES;
+    const sc = this.scene;
+    const s = sc.farToStage(p.sun.x, p.sun.y, 0.22);
     // in the middle of the day the sun is high above the frame, toward the side it's on
     const sx = s.x * k, sy = Math.max(s.y, -this.H * 0.9) * k;
     const glow = p.glow;

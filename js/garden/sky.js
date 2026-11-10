@@ -19,46 +19,55 @@ import { clamp, lerp, smoothstep, bump } from '../math.js';
 // dapple: leaf shade under the maple 0–1 · water: the basin's reflection
 const PAL = {
   night: {
+    slope: ['#24305a', '#1c264b', '#151d3c'], peak: '#2d3a69', snow: '#7c88b8', unkai: 0.14,
     sky: ['#0b1029', '#141c42', '#22305e', '#34437a'], ridge: ['#26315c', '#1d2650', '#161d40'],
     mist: ['#5d6aa0', 0.22], amb: '#323f75', ambSun: '#4f5f9a', vig: 0.62, stars: 1, rays: 0, lamp: 1, dapple: 0,
     water: '#2f3f72', glow: '#ffd7a0', lift: 0,
   },
   blue: {
+    slope: ['#5d6088', '#4a4f77', '#3a4166'], peak: '#7d7aa8', snow: '#cfbcd4', unkai: 0.9,
     sky: ['#1d2550', '#3b4479', '#7d7aa6', '#d09aa0'], ridge: ['#6a6a98', '#4f5384', '#3a4271'],
     mist: ['#c3b0d0', 0.4], amb: '#8a8bb6', ambSun: '#9c8fb2', vig: 0.45, stars: 0.45, rays: 0, lamp: 0.8, dapple: 0,
     water: '#7b7fae', glow: '#ffd7a0', lift: 0.15,
   },
   sunrise: {
+    slope: ['#a8949f', '#8a7d8f', '#6d6b7d'], peak: '#c4aabd', snow: '#ffd8ca', unkai: 1,
     sky: ['#7187bd', '#b2aac6', '#f1bea4', '#ffd6a0'], ridge: ['#b7a4bf', '#998fb0', '#7b7d9e'],
     mist: ['#fde3cc', 0.7], amb: '#f0d6cc', ambSun: '#ffdcb4', vig: 0.32, stars: 0, rays: 0.7, lamp: 0.25, dapple: 0.5,
     water: '#d6b9bd', glow: '#ffd09a', lift: 0.45,
   },
   morning: {
+    slope: ['#9db2a3', '#7c977f', '#5f7d63'], peak: '#bccaca', snow: '#f8f5ef', unkai: 0.7,
     sky: ['#86b0cc', '#b5d0d8', '#e9e6d4', '#f7eedb'], ridge: ['#c4cfcc', '#a9b9b2', '#8da293'],
     mist: ['#fbf6ea', 0.85], amb: '#f7f4f2', ambSun: '#fff3e0', vig: 0.18, stars: 0, rays: 0.55, lamp: 0, dapple: 0.85,
     water: '#a9c8cc', glow: '#fff1c9', lift: 0.5,
   },
   day: {
+    slope: ['#97ae9e', '#729077', '#557558'], peak: '#b6c7c9', snow: '#f9f7f1', unkai: 0,
     sky: ['#7ba8c8', '#acc9d5', '#e2e4d6', '#f5efdf'], ridge: ['#c1ccca', '#a6b6ae', '#8b9f8e'],
     mist: ['#fbf8ee', 0.85], amb: '#fbf9f6', ambSun: '#fffaf0', vig: 0.14, stars: 0, rays: 0.4, lamp: 0, dapple: 1,
     water: '#a3c6ca', glow: '#fff3cf', lift: 0.5,
   },
   afternoon: {
+    slope: ['#a2ab95', '#7e8c6b', '#627355'], peak: '#c1c2b9', snow: '#fcf3e4', unkai: 0,
     sky: ['#98b5c6', '#c3cfcb', '#ede0c4', '#f7e4c0'], ridge: ['#c8c6ba', '#aeb19f', '#929b83'],
     mist: ['#fcefd6', 0.85], amb: '#f7ecdf', ambSun: '#ffe9c8', vig: 0.2, stars: 0, rays: 0.6, lamp: 0, dapple: 1,
     water: '#b3c4bb', glow: '#ffe7b0', lift: 0.55,
   },
   golden: {
+    slope: ['#a99f86', '#878567', '#69704f'], peak: '#cbb0a7', snow: '#ffe3c0', unkai: 0,
     sky: ['#7690bb', '#b9b3bd', '#f2c995', '#ffd27e'], ridge: ['#c4a9a4', '#a08e98', '#7d7385'],
     mist: ['#ffe0a6', 0.8], amb: '#f2cfb2', ambSun: '#ffd596', vig: 0.34, stars: 0, rays: 1, lamp: 0.15, dapple: 0.9,
     water: '#e3c49a', glow: '#ffd27a', lift: 0.65,
   },
   sunset: {
+    slope: ['#8f7686', '#71627a', '#585367'], peak: '#a98199', snow: '#ffc6a8', unkai: 0,
     sky: ['#4f5d98', '#b0849f', '#ee9b72', '#ffbd6a'], ridge: ['#9e7a96', '#7b6587', '#5c5172'],
     mist: ['#ffc39a', 0.7], amb: '#cf9a9c', ambSun: '#ffb879', vig: 0.42, stars: 0.05, rays: 0.8, lamp: 0.65, dapple: 0.5,
     water: '#d99a8a', glow: '#ffc070', lift: 0.55,
   },
   dusk: {
+    slope: ['#4c4a72', '#3d3e63', '#303356'], peak: '#635e8c', snow: '#aaa0c8', unkai: 0.12,
     sky: ['#1b2250', '#383b72', '#755c8a', '#c48686'], ridge: ['#575281', '#403d69', '#2e2d55'],
     mist: ['#a18db6', 0.38], amb: '#8781ac', ambSun: '#9a86aa', vig: 0.48, stars: 0.55, rays: 0, lamp: 1, dapple: 0,
     water: '#6b6c9c', glow: '#ffd7a0', lift: 0.2,
@@ -78,6 +87,7 @@ const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
 const PALRGB = Object.fromEntries(Object.entries(PAL).map(([k, p]) => [k, {
   ...p,
   sky: p.sky.map(hex), ridge: p.ridge.map(hex), mist: [hex(p.mist[0]), p.mist[1]],
+  slope: p.slope.map(hex), peak: hex(p.peak), snow: hex(p.snow),
   amb: hex(p.amb), ambSun: hex(p.ambSun), water: hex(p.water), glow: hex(p.glow),
 }]));
 
@@ -112,6 +122,10 @@ export function paletteAt(hour) {
     sky: a.sky.map((c, j) => mixRGB(c, b.sky[j], t)),
     ridge: a.ridge.map((c, j) => mixRGB(c, b.ridge[j], t)),
     mist: [mixRGB(a.mist[0], b.mist[0], t), lerp(a.mist[1], b.mist[1], t)],
+    slope: a.slope.map((c, j) => mixRGB(c, b.slope[j], t)),
+    peak: mixRGB(a.peak, b.peak, t),
+    snow: mixRGB(a.snow, b.snow, t),
+    unkai: lerp(a.unkai, b.unkai, t),
     amb: mixRGB(a.amb, b.amb, t),
     ambSun: mixRGB(a.ambSun, b.ambSun, t),
     water: mixRGB(a.water, b.water, t),
@@ -204,6 +218,9 @@ export class Sky {
       '--sky2': css(under(p.sky[2], amb(405))), '--sky3': css(under(p.sky[3], amb(470))),
       '--ridge0': css(under(p.ridge[0], amb(330))), '--ridge1': css(under(p.ridge[1], amb(385))), '--ridge2': css(under(p.ridge[2], amb(425))),
       '--mist': css(under(p.mist[0], amb(370))), '--mist-a': p.mist[1].toFixed(3),
+      '--peak': css(under(p.peak, amb(300))), '--snow': css(under(p.snow, amb(270))),
+      '--slope0': css(under(p.slope[0], amb(470))), '--slope1': css(under(p.slope[1], amb(560))), '--slope2': css(under(p.slope[2], amb(650))),
+      '--unkai': p.unkai.toFixed(3),
       '--water-sky': css(under(p.water, avg)),
       '--stars': p.stars.toFixed(3),
       '--lamp': p.lamp.toFixed(3),

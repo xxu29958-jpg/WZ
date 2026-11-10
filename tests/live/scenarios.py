@@ -34,6 +34,8 @@ class Page:
         self.ff.open_sized(self.origin, self.path + (sep + extra if extra else ""), self.w, self.h)
         self.ff.js(FRAME_PROBE)
         time.sleep(wait)
+        # on arrival the camera comes down from the sky: let it settle before anything is measured
+        self.wait_for("window.__zen && !document.body.classList.contains('arriving') && Math.abs(window.__zen.scene.tilt) < 0.5", 8, every=0.1)
 
     def js(self, s, *a):
         return self.ff.js(s, *a)

@@ -2,7 +2,7 @@
 // paper grain, ink-wash hills and mist, the ensō, raked sand and ripple rings,
 // maple leaves, fireflies. Mixed into Scene (see scene.js); `this` is the scene.
 
-import { TAU, DEG, makeRng, noise1, lerp } from '../math.js';
+import { TAU, DEG, makeRng, noise1, lerp, clamp } from '../math.js';
 import { $, f2, svgEl } from '../util.js';
 import { EnsoBrush } from './enso.js';
 
@@ -30,6 +30,28 @@ export class GardenArt {
       return d + ` L ${X1},620 Z`;
     };
     const at = (ys, x) => ys[Math.round((x - X0) / STEP)];
+    // the sacred mountain, far away behind everything: a tall cone with a snow cap
+    const PX = 820, PW = 470, PH = 152, PTOP = 284;
+    const peakY = (x) => {
+      const u = clamp(Math.abs(x - PX) / PW);
+      return Math.abs(x - PX) < 16 ? PTOP + 3 : PTOP + PH * (1 - Math.pow(1 - u, 1.85));
+    };
+    const peak = xs.map(peakY);
+    this.peakY = peakY; // (the lake below reflects it)
+    this.peakX = PX;
+    svgEl('path', { d: toPath(peak), class: 'peak' }, host);
+    // the shadowed flank, and the snow (it reaches down in streaks)
+    let flank = `M ${PX},${PTOP + 3}`;
+    for (let x = PX; x <= PX + PW; x += 10) flank += ` L ${x},${f2(peakY(x))}`;
+    flank += ` L ${PX + PW},620 L ${PX + 40},620 Q ${PX + 10},${PTOP + 120} ${PX},${PTOP + 3} Z`;
+    svgEl('path', { d: flank, class: 'peak-shade' }, host);
+    let snow = `M ${PX - 104},${f2(peakY(PX - 104))}`;
+    for (let x = PX - 104; x <= PX + 104; x += 6) snow += ` L ${x},${f2(peakY(x) - 0.5)}`;
+    for (let x = PX + 104; x >= PX - 104; x -= 6) {
+      const streak = Math.abs(Math.sin(x * 0.085)) * 16 + Math.abs(noise1(x * 0.05, 2)) * 12;
+      snow += ` L ${x},${f2(Math.min(peakY(x) + 4 + streak + (112 - Math.abs(x - PX)) * 0.22, PTOP + 56))}`;
+    }
+    svgEl('path', { d: snow + ' Z', class: 'snow' }, host);
     // far peaks, a mist band, the middle ridge (with a pagoda and pines), mist, the near hills
     svgEl('path', { d: toPath(far), class: 'hill-far' }, host);
     svgEl('path', { d: 'M -1500,372 Q 300,352 1100,368 T 3100,360 L 3100,384 Q 1700,396 900,388 T -1500,392 Z', class: 'mist' }, host);
@@ -42,14 +64,14 @@ export class GardenArt {
     svgEl('path', { d: 'M -1500,416 Q 500,404 1300,416 T 3100,410 L 3100,432 Q 1800,440 1000,432 T -1500,436 Z', class: 'mist' }, host);
     svgEl('path', { d: toPath(near), class: 'hill-near' }, host);
     // the skyline (whatever is highest at each x): stars and the moon are clipped to the sky above it
-    let d = `M ${X0},-2000 L ${X0},${f2(Math.min(far[0], mid[0], near[0]))}`;
+    let d = `M ${X0},-2000 L ${X0},${f2(Math.min(far[0], mid[0], near[0], peak[0]))}`;
     for (let i = 1; i < n; i++) {
-      let y = Math.min(far[i], mid[i], near[i]);
+      let y = Math.min(far[i], mid[i], near[i], peak[i]);
       if (Math.abs(xs[i] - PAGODA_X) < 26) y = Math.min(y, pagodaY - 96 + Math.abs(xs[i] - PAGODA_X) * 2.6);
       d += ` L ${xs[i]},${f2(y)}`;
     }
     $('above-hills-path').setAttribute('d', d + ` L ${X1},-2000 Z`);
-    this.skyline = (x) => Math.min(at(far, x), at(mid, x), at(near, x));
+    this.skyline = (x) => Math.min(at(far, x), at(mid, x), at(near, x), at(peak, x));
   }
 
   /** A five-story pagoda, as a silhouette standing on (x, y). */
